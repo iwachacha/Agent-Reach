@@ -42,9 +42,11 @@ def test_docs_folder_only_contains_supported_docs():
     names = {path.name for path in docs_dir.iterdir()}
 
     assert names == {
+        "agent-reach-nexus-concept.md",
         "codex-compatibility.md",
         "codex-integration.md",
         "downstream-usage.md",
+        "field-research-improvements-2026-04-10.md",
         "install.md",
         "python-sdk.md",
         "troubleshooting.md",

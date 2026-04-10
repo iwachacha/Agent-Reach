@@ -63,6 +63,8 @@ def _artifact_paths(repo_root: Path) -> dict[str, Path]:
         "docs_codex_compatibility": repo_root / "docs" / "codex-compatibility.md",
         "docs_downstream_usage": repo_root / "docs" / "downstream-usage.md",
         "docs_python_sdk": repo_root / "docs" / "python-sdk.md",
+        "docs_field_research_improvements": repo_root / "docs" / "field-research-improvements-2026-04-10.md",
+        "docs_agent_reach_nexus_concept": repo_root / "docs" / "agent-reach-nexus-concept.md",
     }
 
 
@@ -92,6 +94,8 @@ def _recommended_docs(repo_root: Path) -> list[str]:
         _artifact_paths(repo_root)["docs_codex_compatibility"],
         _artifact_paths(repo_root)["docs_downstream_usage"],
         _artifact_paths(repo_root)["docs_python_sdk"],
+        _artifact_paths(repo_root)["docs_field_research_improvements"],
+        _artifact_paths(repo_root)["docs_agent_reach_nexus_concept"],
     ]
     return [str(path) for path in docs if path.exists()]
 

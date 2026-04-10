@@ -54,6 +54,8 @@ def test_export_points_at_existing_checkout_artifacts():
     assert Path(payload["plugin_manifest"]).exists()
     assert Path(payload["mcp_config"]).exists()
     assert all(Path(path).exists() for path in payload["recommended_docs"])
+    assert any(path.endswith("field-research-improvements-2026-04-10.md") for path in payload["recommended_docs"])
+    assert any(path.endswith("agent-reach-nexus-concept.md") for path in payload["recommended_docs"])
     assert payload["skill"]["targets"]
     assert Path(payload["skill"]["source"]).exists()
     assert payload["python_sdk"]["availability"] == "project_env_only"

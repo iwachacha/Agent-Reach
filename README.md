@@ -113,6 +113,8 @@ Agent Reach normalizes results into `items`, keeps the backend-native payload in
 - Python SDK: [docs/python-sdk.md](docs/python-sdk.md)
 - Codex integration: [docs/codex-integration.md](docs/codex-integration.md)
 - Codex compatibility: [docs/codex-compatibility.md](docs/codex-compatibility.md)
+- Field research improvements: [docs/field-research-improvements-2026-04-10.md](docs/field-research-improvements-2026-04-10.md)
+- Agent Reach Nexus concept: [docs/agent-reach-nexus-concept.md](docs/agent-reach-nexus-concept.md)
 - Troubleshooting: [docs/troubleshooting.md](docs/troubleshooting.md)
 
 ## What `install` does on Windows

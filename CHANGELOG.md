@@ -2,6 +2,13 @@
 
 All notable changes to this fork are documented here.
 
+## Unreleased
+
+### Added
+
+- field research improvement handoff for future Agent Reach work
+- Agent Reach Nexus concept note for capability graph, scout, ledger, planner, and guard ideas
+
 ## [1.5.3] - 2026-04-10
 
 ### Added

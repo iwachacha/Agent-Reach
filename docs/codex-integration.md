@@ -39,6 +39,8 @@ After that, Codex can call `agent-reach collect --json` from any working directo
 - MCP config snippet: `.mcp.json`
 - Bundled skill source: `agent_reach/skill`
 - Python SDK docs: `docs/python-sdk.md`
+- Field research improvements: `docs/field-research-improvements-2026-04-10.md`
+- Agent Reach Nexus concept: `docs/agent-reach-nexus-concept.md`
 
 When `agent-reach` is running from a tool install instead of a source checkout, `export-integration` will not point at nonexistent repo-root files. In that mode it returns:
 
