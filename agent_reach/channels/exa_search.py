@@ -21,6 +21,7 @@ class ExaSearchChannel(Channel):
     auth_kind = "runtime"
     entrypoint_kind = "mcp"
     operations = ["search"]
+    operation_inputs = {"search": "query"}
     required_commands = ["mcporter"]
     host_patterns = ["https://mcp.exa.ai/mcp"]
     example_invocations = [

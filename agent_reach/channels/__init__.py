@@ -7,11 +7,13 @@ from typing import Dict, List, Optional
 
 from .base import Channel
 from .bluesky import BlueskyChannel
+from .crawl4ai import Crawl4AIChannel
 from .exa_search import ExaSearchChannel
 from .github import GitHubChannel
 from .hatena_bookmark import HatenaBookmarkChannel
 from .qiita import QiitaChannel
 from .rss import RSSChannel
+from .searxng import SearXNGChannel
 from .twitter import TwitterChannel
 from .web import WebChannel
 from .youtube import YouTubeChannel
@@ -25,6 +27,8 @@ ALL_CHANNELS: List[Channel] = [
     QiitaChannel(),
     YouTubeChannel(),
     RSSChannel(),
+    SearXNGChannel(),
+    Crawl4AIChannel(),
     TwitterChannel(),
 ]
 

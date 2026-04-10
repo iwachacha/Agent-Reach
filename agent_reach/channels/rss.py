@@ -14,6 +14,7 @@ class RSSChannel(Channel):
     auth_kind = "none"
     entrypoint_kind = "python"
     operations = ["read"]
+    operation_inputs = {"read": "url"}
     host_patterns = ["*feed*", "*.xml", "*atom*"]
     example_invocations = [
         'agent-reach collect --channel rss --operation read --input "https://hnrss.org/frontpage" --limit 10 --json',

@@ -6,8 +6,31 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import yaml
+
+
+def normalize_searxng_base_url(value: Any) -> str | Any:
+    """Normalize a SearXNG instance URL to its base instance root."""
+
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return text
+    if "://" not in text:
+        text = f"https://{text}"
+
+    parsed = urlparse(text)
+    if not parsed.netloc:
+        return text.rstrip("/")
+
+    path = parsed.path.rstrip("/")
+    if path.endswith("/search"):
+        path = path[:-7].rstrip("/")
+
+    return urlunparse((parsed.scheme or "https", parsed.netloc, path, "", "", "")).rstrip("/")
 
 
 class Config:
@@ -18,11 +41,13 @@ class Config:
     ENV_ALIASES = {
         "github_token": ("GITHUB_TOKEN", "GH_TOKEN"),
         "qiita_token": ("QIITA_TOKEN",),
+        "searxng_base_url": ("SEARXNG_BASE_URL",),
         "twitter_auth_token": ("TWITTER_AUTH_TOKEN", "AUTH_TOKEN"),
         "twitter_ct0": ("TWITTER_CT0", "CT0"),
     }
 
     FEATURE_REQUIREMENTS = {
+        "searxng": ["searxng_base_url"],
         "twitter": ["twitter_auth_token", "twitter_ct0"],
         "github_token": ["github_token"],
     }
@@ -70,17 +95,24 @@ class Config:
         """Get a config value, falling back to environment variables."""
 
         if key in self.data:
-            return self.data[key]
+            value = self.data[key]
+            if key == "searxng_base_url":
+                return normalize_searxng_base_url(value)
+            return value
 
         for env_key in self.ENV_ALIASES.get(key, (key.upper(),)):
             env_val = os.environ.get(env_key)
             if env_val:
+                if key == "searxng_base_url":
+                    return normalize_searxng_base_url(env_val)
                 return env_val
         return default
 
     def set(self, key: str, value: Any) -> None:
         """Set a config value and save."""
 
+        if key == "searxng_base_url":
+            value = normalize_searxng_base_url(value)
         self.data[key] = value
         self.save()
 

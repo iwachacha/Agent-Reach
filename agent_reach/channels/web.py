@@ -18,6 +18,7 @@ class WebChannel(Channel):
     auth_kind = "none"
     entrypoint_kind = "http_reader"
     operations = ["read"]
+    operation_inputs = {"read": "url"}
     host_patterns = ["http://*", "https://*"]
     example_invocations = [
         'agent-reach collect --channel web --operation read --input "https://example.com" --json',

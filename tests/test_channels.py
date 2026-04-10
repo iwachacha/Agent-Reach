@@ -5,10 +5,12 @@ import urllib.request
 
 from agent_reach.channels import get_all_channels, get_channel
 from agent_reach.channels.bluesky import BlueskyChannel
+from agent_reach.channels.crawl4ai import Crawl4AIChannel
 from agent_reach.channels.exa_search import ExaSearchChannel
 from agent_reach.channels.github import GitHubChannel
 from agent_reach.channels.hatena_bookmark import HatenaBookmarkChannel
 from agent_reach.channels.qiita import QiitaChannel
+from agent_reach.channels.searxng import SearXNGChannel
 from agent_reach.channels.web import WebChannel
 
 
@@ -23,6 +25,8 @@ def test_registry_contains_only_supported_channels():
         "qiita",
         "youtube",
         "rss",
+        "searxng",
+        "crawl4ai",
         "twitter",
     ]
 
@@ -127,3 +131,26 @@ def test_bluesky_can_handle_bsky_urls():
 def test_qiita_can_handle_qiita_urls():
     channel = QiitaChannel()
     assert channel.can_handle("https://qiita.com/Qiita/items/example")
+
+
+def test_searxng_requires_config(tmp_path):
+    from agent_reach.config import Config
+
+    channel = SearXNGChannel()
+    status, message = channel.check(Config(config_path=tmp_path / "config.yaml"))
+    assert status == "off"
+    assert "configure searxng-base-url" in message
+
+
+def test_crawl4ai_can_handle_http_urls():
+    channel = Crawl4AIChannel()
+    assert channel.can_handle("https://example.com")
+    assert not channel.can_handle("notaurl")
+
+
+def test_channel_contract_exposes_operation_option_schema():
+    qiita_contract = QiitaChannel().to_contract()
+    assert qiita_contract["operation_contracts"]["search"]["options"][0]["cli_flag"] == "--body-mode"
+
+    crawl_contract = Crawl4AIChannel().to_contract()
+    assert crawl_contract["operation_contracts"]["crawl"]["options"][0]["name"] == "query"

@@ -34,15 +34,18 @@ class TestConfig:
     def test_get_uses_known_env_aliases(self, tmp_config, monkeypatch):
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("QIITA_TOKEN", raising=False)
+        monkeypatch.delenv("SEARXNG_BASE_URL", raising=False)
         monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
         monkeypatch.delenv("TWITTER_CT0", raising=False)
         monkeypatch.setenv("GH_TOKEN", "gh-token")
         monkeypatch.setenv("QIITA_TOKEN", "qiita-token")
+        monkeypatch.setenv("SEARXNG_BASE_URL", "https://search.example.com/search")
         monkeypatch.setenv("AUTH_TOKEN", "auth-token")
         monkeypatch.setenv("CT0", "ct0-token")
 
         assert tmp_config.get("github_token") == "gh-token"
         assert tmp_config.get("qiita_token") == "qiita-token"
+        assert tmp_config.get("searxng_base_url") == "https://search.example.com"
         assert tmp_config.get("twitter_auth_token") == "auth-token"
         assert tmp_config.get("twitter_ct0") == "ct0-token"
 
@@ -71,9 +74,14 @@ class TestConfig:
         tmp_config.set("github_token", "test-key")
         assert tmp_config.is_configured("github_token")
 
+    def test_set_normalizes_searxng_base_url(self, tmp_config):
+        tmp_config.set("searxng_base_url", "search.example.com/search")
+        assert tmp_config.get("searxng_base_url") == "https://search.example.com"
+
     def test_get_configured_features(self, tmp_config, monkeypatch):
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.delenv("SEARXNG_BASE_URL", raising=False)
         monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
         monkeypatch.delenv("TWITTER_CT0", raising=False)
         monkeypatch.delenv("AUTH_TOKEN", raising=False)
@@ -81,6 +89,7 @@ class TestConfig:
         features = tmp_config.get_configured_features()
         assert isinstance(features, dict)
         assert "github_token" in features
+        assert "searxng" in features
         assert "twitter" in features
         assert all(v is False for v in features.values())
 

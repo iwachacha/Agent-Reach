@@ -18,6 +18,14 @@ class _StubChannel:
     example_invocations = []
     supports_probe = True
     install_hints = []
+    operation_contracts = {
+        "read": {
+            "name": "read",
+            "input_kind": "url",
+            "accepts_limit": True,
+            "options": [],
+        }
+    }
 
     def __init__(self, name, description, tier, status, message, backends=None):
         self.name = name
@@ -47,6 +55,7 @@ class _StubChannel:
             "example_invocations": self.example_invocations,
             "supports_probe": self.supports_probe,
             "install_hints": self.install_hints,
+            "operation_contracts": self.operation_contracts,
         }
 
 
@@ -71,6 +80,7 @@ def test_check_all_collects_channel_results(tmp_config, monkeypatch):
     assert results["web"]["description"] == "Any web page"
     assert results["web"]["status"] == "ok"
     assert results["web"]["operation_statuses"]["read"]["status"] == "ok"
+    assert results["web"]["operation_contracts"]["read"]["input_kind"] == "url"
     assert results["github"]["backends"] == ["gh"]
     assert results["twitter"]["tier"] == 1
     assert results["twitter"]["supports_probe"] is True
@@ -82,6 +92,24 @@ def test_check_all_uses_probe_when_requested(tmp_config, monkeypatch):
     results = doctor.check_all(tmp_config, probe=True)
     assert results["web"]["status"] == "ok"
     assert results["web"]["message"] == "probe:web"
+
+
+def test_check_all_skips_probe_for_channels_without_probe_support(tmp_config, monkeypatch):
+    class _NoProbeChannel(_StubChannel):
+        supports_probe = False
+
+        def probe(self, config=None):
+            raise AssertionError("probe should not run when supports_probe is false")
+
+    monkeypatch.setattr(
+        doctor,
+        "get_all_channels",
+        lambda: [_NoProbeChannel("crawl4ai", "Browser-backed page reads", 2, "ok", "ready")],
+    )
+
+    results = doctor.check_all(tmp_config, probe=True)
+    assert results["crawl4ai"]["status"] == "ok"
+    assert results["crawl4ai"]["message"] == "ready"
 
 
 def test_check_all_includes_extra_machine_readable_fields(tmp_config, monkeypatch):

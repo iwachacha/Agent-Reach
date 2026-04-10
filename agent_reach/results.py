@@ -45,6 +45,36 @@ class CollectionResult(TypedDict):
     error: CollectionError | None
 
 
+def build_pagination_meta(
+    *,
+    limit: int | None = None,
+    page_size: int | None = None,
+    pages_fetched: int | None = None,
+    next_cursor: Any = None,
+    has_more: bool | None = None,
+    total_available: int | str | None = None,
+) -> dict[str, Any]:
+    """Build standardized pagination metadata fields."""
+
+    meta: dict[str, Any] = {}
+    if limit is not None:
+        meta["requested_limit"] = int(limit)
+    if page_size is not None:
+        meta["page_size"] = int(page_size)
+    if pages_fetched is not None:
+        meta["pages_fetched"] = int(pages_fetched)
+    if next_cursor is not None:
+        meta["next_cursor"] = next_cursor
+    if has_more is not None:
+        meta["has_more"] = bool(has_more)
+    if total_available is not None:
+        try:
+            meta["total_available"] = int(total_available)
+        except (TypeError, ValueError):
+            meta["total_available"] = total_available
+    return meta
+
+
 def build_item(
     *,
     item_id: str,
@@ -84,12 +114,18 @@ def build_result(
 ) -> CollectionResult:
     """Build a collection result envelope."""
 
+    item_count = len(items or [])
     payload_meta = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": utc_timestamp(),
         **(meta or {}),
     }
-    payload_meta.setdefault("count", len(items or []))
+    if "limit" in payload_meta and "requested_limit" not in payload_meta:
+        payload_meta["requested_limit"] = payload_meta["limit"]
+    if payload_meta.get("count") is None:
+        payload_meta["count"] = item_count
+    if payload_meta.get("returned_count") is None:
+        payload_meta["returned_count"] = item_count
     return {
         "ok": ok,
         "channel": channel,

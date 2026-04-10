@@ -6,12 +6,20 @@ from __future__ import annotations
 import time
 import warnings
 
-from agent_reach.results import CollectionResult, NormalizedItem, build_item, parse_timestamp
+from agent_reach.results import (
+    CollectionResult,
+    NormalizedItem,
+    build_item,
+    build_pagination_meta,
+    parse_timestamp,
+)
 
 from .base import BaseAdapter
 
 _UA = "agent-reach/1.4.0 (+https://github.com/iwachacha/Agent-Reach)"
 _ITEMS_API = "https://qiita.com/api/v2/items"
+_BODY_SNIPPET_CHARS = 500
+_BODY_MODES = {"none", "snippet", "full"}
 
 
 def _import_requests():
@@ -31,8 +39,16 @@ class QiitaAdapter(BaseAdapter):
     channel = "qiita"
     operations = ("search",)
 
-    def search(self, query: str, limit: int = 10) -> CollectionResult:
+    def search(self, query: str, limit: int = 10, body_mode: str = "full") -> CollectionResult:
         started_at = time.perf_counter()
+        if body_mode not in _BODY_MODES:
+            return self.error_result(
+                "search",
+                code="invalid_input",
+                message="body_mode must be one of: none, snippet, full",
+                meta=self.make_meta(value=query, limit=limit, started_at=started_at, body_mode=body_mode),
+            )
+
         requests = _import_requests()
         headers = {
             "User-Agent": _UA,
@@ -58,7 +74,12 @@ class QiitaAdapter(BaseAdapter):
                 "search",
                 code="http_error",
                 message=f"Qiita search failed: {exc}",
-                meta=self.make_meta(value=query, limit=limit, started_at=started_at),
+                meta=self.make_meta(
+                    value=query,
+                    limit=limit,
+                    started_at=started_at,
+                    body_mode=body_mode,
+                ),
             )
 
         if response.status_code >= 400:
@@ -72,6 +93,7 @@ class QiitaAdapter(BaseAdapter):
                     limit=limit,
                     started_at=started_at,
                     total_count=response.headers.get("Total-Count"),
+                    body_mode=body_mode,
                 ),
             )
 
@@ -83,7 +105,12 @@ class QiitaAdapter(BaseAdapter):
                 code="invalid_response",
                 message="Qiita search returned a non-JSON payload",
                 raw=response.text,
-                meta=self.make_meta(value=query, limit=limit, started_at=started_at),
+                meta=self.make_meta(
+                    value=query,
+                    limit=limit,
+                    started_at=started_at,
+                    body_mode=body_mode,
+                ),
             )
 
         if not isinstance(raw, list):
@@ -92,7 +119,12 @@ class QiitaAdapter(BaseAdapter):
                 code="invalid_response",
                 message="Qiita search payload was not a list",
                 raw=raw,
-                meta=self.make_meta(value=query, limit=limit, started_at=started_at),
+                meta=self.make_meta(
+                    value=query,
+                    limit=limit,
+                    started_at=started_at,
+                    body_mode=body_mode,
+                ),
             )
 
         items: list[NormalizedItem] = [
@@ -101,7 +133,7 @@ class QiitaAdapter(BaseAdapter):
                 kind="article",
                 title=entry.get("title"),
                 url=entry.get("url"),
-                text=entry.get("body"),
+                text=_body_for_mode(entry.get("body"), body_mode),
                 author=(entry.get("user") or {}).get("id"),
                 published_at=parse_timestamp(entry.get("created_at") or entry.get("updated_at")),
                 source=self.channel,
@@ -118,15 +150,56 @@ class QiitaAdapter(BaseAdapter):
             )
             for idx, entry in enumerate(raw)
         ]
+        raw_output = [_entry_for_body_mode(entry, body_mode) for entry in raw]
+        total_count = response.headers.get("Total-Count")
 
         return self.ok_result(
             "search",
             items=items,
-            raw=raw,
+            raw=raw_output,
             meta=self.make_meta(
                 value=query,
                 limit=limit,
                 started_at=started_at,
-                total_count=response.headers.get("Total-Count"),
+                total_count=total_count,
+                body_mode=body_mode,
+                **build_pagination_meta(
+                    limit=limit,
+                    page_size=len(raw),
+                    pages_fetched=1,
+                    has_more=_has_more(total_count, len(raw_output)),
+                    total_available=total_count,
+                ),
             ),
         )
+
+
+def _body_for_mode(body: object, body_mode: str) -> str | None:
+    if body is None:
+        return None
+    text = str(body)
+    if body_mode == "none":
+        return None
+    if body_mode == "snippet":
+        return text[:_BODY_SNIPPET_CHARS]
+    return text
+
+
+def _entry_for_body_mode(entry: dict, body_mode: str) -> dict:
+    if body_mode == "full":
+        return entry
+    output = dict(entry)
+    if body_mode == "none":
+        output.pop("body", None)
+    elif body_mode == "snippet" and "body" in output:
+        output["body"] = _body_for_mode(output.get("body"), body_mode)
+    return output
+
+
+def _has_more(total_count: str | int | None, returned_count: int) -> bool | None:
+    if total_count is None:
+        return None
+    try:
+        return int(total_count) > returned_count
+    except (TypeError, ValueError):
+        return None

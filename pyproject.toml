@@ -40,6 +40,9 @@ dev = [
     "types-requests>=2.32",
     "types-PyYAML>=6.0",
 ]
+crawl4ai = [
+    "crawl4ai>=0.8.6",
+]
 
 [project.scripts]
 agent-reach = "agent_reach.cli:main"

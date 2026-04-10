@@ -12,6 +12,7 @@ from agent_reach.results import (
     CollectionResult,
     NormalizedItem,
     build_item,
+    build_pagination_meta,
     derive_title_from_text,
     parse_timestamp,
 )
@@ -252,6 +253,13 @@ class BlueskyAdapter(BaseAdapter):
                     fallback_used=index > 0,
                     attempted_hosts=[attempt["api_base_url"] for attempt in attempts],
                     attempted_host_results=list(attempts),
+                    **build_pagination_meta(
+                        limit=limit,
+                        page_size=len(posts),
+                        pages_fetched=1,
+                        next_cursor=raw.get("cursor"),
+                        has_more=bool(raw.get("cursor")) if raw.get("cursor") is not None else None,
+                    ),
                 ),
             )
 

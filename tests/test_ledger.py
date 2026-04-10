@@ -9,7 +9,11 @@ from agent_reach.ledger import (
     append_ledger_record,
     build_ledger_record,
     default_run_id,
+    ledger_input_paths,
+    merge_ledger_inputs,
     save_collection_result,
+    save_collection_result_sharded,
+    shard_ledger_path,
 )
 from agent_reach.results import build_error, build_item, build_result
 
@@ -69,6 +73,21 @@ def test_build_ledger_record_success_shape():
     assert record["result"] == payload
 
 
+def test_build_ledger_record_preserves_relevance_metadata():
+    payload = _success_result()
+    record = build_ledger_record(
+        payload,
+        run_id="run-1",
+        intent="official_docs",
+        query_id="q01",
+        source_role="web_discovery",
+    )
+
+    assert record["intent"] == "official_docs"
+    assert record["query_id"] == "q01"
+    assert record["source_role"] == "web_discovery"
+
+
 def test_build_ledger_record_error_shape():
     payload = _error_result()
     record = build_ledger_record(payload, run_id="run-2")
@@ -115,3 +134,46 @@ def test_default_run_id_falls_back_to_timestamp(monkeypatch):
     monkeypatch.delenv("AGENT_REACH_RUN_ID", raising=False)
 
     assert default_run_id().startswith("run-")
+
+
+def test_shard_ledger_path_uses_requested_strategy(tmp_path):
+    assert shard_ledger_path(tmp_path, channel="web", operation="read", shard_by="channel").name == "web.jsonl"
+    assert shard_ledger_path(tmp_path, channel="web", operation="read", shard_by="operation").name == "read.jsonl"
+    assert shard_ledger_path(tmp_path, channel="web", operation="read", shard_by="channel-operation").name == "web__read.jsonl"
+
+
+def test_save_collection_result_sharded_writes_expected_file(tmp_path):
+    record, shard_path = save_collection_result_sharded(
+        tmp_path / "ledger",
+        _success_result(),
+        run_id="run-3",
+        shard_by="channel-operation",
+    )
+
+    assert record["run_id"] == "run-3"
+    assert shard_path.name == "web__read.jsonl"
+    assert shard_path.exists()
+
+
+def test_ledger_input_paths_reads_directory(tmp_path):
+    source_dir = tmp_path / "ledger"
+    source_dir.mkdir()
+    (source_dir / "web.jsonl").write_text("{}", encoding="utf-8")
+    (source_dir / "rss.jsonl").write_text("{}", encoding="utf-8")
+
+    paths = ledger_input_paths(source_dir)
+
+    assert [path.name for path in paths] == ["rss.jsonl", "web.jsonl"]
+
+
+def test_merge_ledger_inputs_combines_shards(tmp_path):
+    source_dir = tmp_path / "ledger"
+    source_dir.mkdir()
+    (source_dir / "web.jsonl").write_text('{"record_type":"collection_result","id":"1"}\n', encoding="utf-8")
+    (source_dir / "rss.jsonl").write_text('{"record_type":"collection_result","id":"2"}\n', encoding="utf-8")
+
+    payload = merge_ledger_inputs(source_dir, tmp_path / "merged.jsonl")
+
+    assert payload["files_merged"] == 2
+    assert payload["records_written"] == 2
+    assert payload["inputs"][0].endswith("rss.jsonl")

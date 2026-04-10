@@ -2,6 +2,7 @@
 """Tests for the Windows/Codex CLI surface."""
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import agent_reach.cli as cli
@@ -413,6 +414,230 @@ class TestCLI:
         assert ledger_record["error_code"] == "unknown_channel"
         assert ledger_record["result"]["error"]["code"] == "unknown_channel"
 
+    def test_collect_annotations_require_save(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                raise AssertionError("collect should not run without --save")
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--intent",
+                    "official_docs",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "require --save" in captured.err
+
+    def test_collect_save_records_relevance_metadata(self, capsys, monkeypatch, tmp_path):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": "1", "title": "Example", "url": value}],
+                    "raw": None,
+                    "meta": {"count": 1},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+        ledger_path = tmp_path / "evidence.jsonl"
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--save",
+                    str(ledger_path),
+                    "--intent",
+                    "official_docs",
+                    "--query-id",
+                    "q01",
+                    "--source-role",
+                    "web_discovery",
+                ]
+            )
+            == 0
+        )
+        capsys.readouterr()
+        record = json.loads(ledger_path.read_text(encoding="utf-8"))
+        assert record["intent"] == "official_docs"
+        assert record["query_id"] == "q01"
+        assert record["source_role"] == "web_discovery"
+
+    def test_collect_body_mode_rejects_non_qiita_search(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                raise AssertionError("collect should not run for unsupported body-mode")
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--body-mode",
+                    "none",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "body-mode is only supported for qiita search" in captured.err
+
+    def test_collect_body_mode_passes_to_qiita_search(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None, body_mode=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [],
+                    "raw": {"body_mode": body_mode},
+                    "meta": {"input": value, "limit": limit, "body_mode": body_mode},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "qiita",
+                    "--operation",
+                    "search",
+                    "--input",
+                    "python",
+                    "--limit",
+                    "1",
+                    "--body-mode",
+                    "none",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["meta"]["body_mode"] == "none"
+
+    def test_collect_query_rejects_non_crawl4ai_crawl(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None, crawl_query=None):
+                raise AssertionError("collect should not run for unsupported query option")
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--query",
+                    "pricing",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "query is only supported for crawl4ai crawl" in captured.err
+
+    def test_collect_crawl4ai_crawl_requires_query(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None, crawl_query=None):
+                raise AssertionError("collect should not run without crawl query")
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "crawl4ai",
+                    "--operation",
+                    "crawl",
+                    "--input",
+                    "https://example.com",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "crawl4ai crawl requires --query" in captured.err
+
+    def test_collect_crawl4ai_query_passes_to_client(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None, crawl_query=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [],
+                    "raw": {"crawl_query": crawl_query},
+                    "meta": {"input": value, "limit": limit, "crawl_query": crawl_query},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "crawl4ai",
+                    "--operation",
+                    "crawl",
+                    "--input",
+                    "https://example.com",
+                    "--limit",
+                    "3",
+                    "--query",
+                    "pricing faq",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["meta"]["crawl_query"] == "pricing faq"
+
     def test_plan_candidates_json(self, capsys, tmp_path):
         ledger_path = tmp_path / "evidence.jsonl"
         result = {
@@ -467,6 +692,115 @@ class TestCLI:
         assert payload["summary"]["candidate_count"] == 1
         assert payload["candidates"][0]["title"] == "Example"
         assert payload["candidates"][0]["extras"]["seen_in"][0]["run_id"] == "run-1"
+
+    def test_plan_candidates_summary_only_json(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        result = {
+            "ok": True,
+            "channel": "web",
+            "operation": "read",
+            "items": [
+                {
+                    "id": "item-1",
+                    "kind": "page",
+                    "title": "Example",
+                    "url": "https://example.com",
+                    "text": None,
+                    "author": None,
+                    "published_at": None,
+                    "source": "web",
+                    "extras": {},
+                }
+            ],
+            "raw": None,
+            "meta": {"input": "https://example.com", "count": 1},
+            "error": None,
+        }
+        ledger_path.write_text(json.dumps(result) + "\n", encoding="utf-8")
+
+        assert (
+            main(
+                [
+                    "plan",
+                    "candidates",
+                    "--input",
+                    str(ledger_path),
+                    "--summary-only",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["summary_only"] is True
+        assert payload["summary"]["candidate_count"] == 1
+        assert payload["candidates"] == []
+
+    def test_plan_candidates_fields_json(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        result = {
+            "ok": True,
+            "channel": "web",
+            "operation": "read",
+            "items": [
+                {
+                    "id": "item-1",
+                    "kind": "page",
+                    "title": "Example",
+                    "url": "https://example.com",
+                    "text": None,
+                    "author": None,
+                    "published_at": None,
+                    "source": "web",
+                    "extras": {},
+                }
+            ],
+            "raw": None,
+            "meta": {"input": "https://example.com", "count": 1, "intent": "official_docs"},
+            "error": None,
+        }
+        ledger_path.write_text(json.dumps(result) + "\n", encoding="utf-8")
+
+        assert (
+            main(
+                [
+                    "plan",
+                    "candidates",
+                    "--input",
+                    str(ledger_path),
+                    "--fields",
+                    "title,url,intent",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["candidates"] == [
+            {"title": "Example", "url": "https://example.com", "intent": "official_docs"}
+        ]
+
+    def test_plan_candidates_unknown_field_returns_exit_2(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        ledger_path.write_text("", encoding="utf-8")
+
+        assert (
+            main(
+                [
+                    "plan",
+                    "candidates",
+                    "--input",
+                    str(ledger_path),
+                    "--fields",
+                    "title,nope",
+                    "--json",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "Unsupported candidate field" in captured.err
 
     def test_plan_candidates_text(self, capsys, tmp_path):
         ledger_path = tmp_path / "evidence.jsonl"
@@ -533,11 +867,397 @@ class TestCLI:
         help_text = parser.format_help()
         assert "watch" not in help_text
 
+    def test_scout_plan_only_json(self, capsys, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.scout.check_all",
+            lambda _config, probe=False: {
+                "github": {"status": "ok", "message": "ready"},
+                "exa_search": {"status": "ok", "message": "ready"},
+                "web": {"status": "ok", "message": "ready"},
+                "searxng": {"status": "off", "message": "configure it"},
+                "crawl4ai": {"status": "off", "message": "install extra"},
+                "twitter": {"status": "warn", "message": "cookies missing"},
+            },
+        )
+        monkeypatch.setattr(
+            "agent_reach.scout.get_all_channel_contracts",
+            lambda: [
+                {"name": "github", "description": "GitHub", "tier": 0, "operations": ["search", "read"], "supports_probe": True},
+                {"name": "exa_search", "description": "Exa", "tier": 0, "operations": ["search"], "supports_probe": True},
+                {"name": "web", "description": "Any web page", "tier": 0, "operations": ["read"], "supports_probe": True},
+                {"name": "searxng", "description": "SearXNG", "tier": 2, "operations": ["search"], "supports_probe": True},
+                {"name": "crawl4ai", "description": "crawl4ai", "tier": 2, "operations": ["read", "crawl"], "supports_probe": False},
+                {"name": "twitter", "description": "Twitter/X", "tier": 1, "operations": ["search"], "supports_probe": True},
+            ],
+        )
+
+        assert (
+            main(
+                [
+                    "scout",
+                    "--topic",
+                    "MCP security",
+                    "--budget",
+                    "auto",
+                    "--quality",
+                    "precision",
+                    "--preset",
+                    "oss-watch",
+                    "--plan-only",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["command"] == "scout"
+        assert payload["plan_only"] is True
+        assert payload["quality_profile"] == "precision"
+        assert payload["ready_channels"] == ["github", "exa_search", "web"]
+        assert payload["seed_channels"] == ["github", "exa_search", "searxng", "web", "crawl4ai"]
+        assert payload["available_channels"][3]["channel"] == "searxng"
+        assert payload["not_ready_channels"][0]["channel"] == "searxng"
+
+    def test_scout_requires_plan_only(self, capsys):
+        assert main(["scout", "--topic", "MCP", "--json"]) == 2
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "requires --plan-only" in captured.err
+
+    def test_scout_validates_stale_preset_channels(self, capsys, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.scout.check_all",
+            lambda _config, probe=False: {"web": {"status": "ok", "message": "ready"}},
+        )
+        monkeypatch.setattr(
+            "agent_reach.scout.get_all_channel_contracts",
+            lambda: [
+                {
+                    "name": "web",
+                    "description": "Any web page",
+                    "tier": 0,
+                    "operations": ["read"],
+                    "operation_contracts": {"read": {"name": "read", "input_kind": "url", "accepts_limit": True, "options": []}},
+                    "supports_probe": True,
+                },
+            ],
+        )
+
+        assert (
+            main(
+                [
+                    "scout",
+                    "--topic",
+                    "MCP",
+                    "--preset",
+                    "broad-web",
+                    "--plan-only",
+                    "--json",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "Preset references unknown channel" in captured.err
+
+    def test_configure_searxng_base_url_normalizes_value(self, capsys, monkeypatch):
+        saved = {}
+
+        class _FakeConfig:
+            def set(self, key, value):
+                saved[key] = value
+
+        monkeypatch.setattr("agent_reach.config.Config", lambda: _FakeConfig())
+
+        assert main(["configure", "searxng-base-url", "search.example.com/search"]) == 0
+        output = capsys.readouterr().out
+        assert saved["searxng_base_url"] == "https://search.example.com"
+        assert "https://search.example.com" in output
+
+    def test_batch_resume_skips_existing_query(self, capsys, monkeypatch, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        ledger_path = tmp_path / "evidence.jsonl"
+        existing_result = {
+            "ok": True,
+            "channel": "web",
+            "operation": "read",
+            "items": [{"id": "old", "url": "https://example.com/old"}],
+            "raw": None,
+            "meta": {"input": "https://example.com/old", "limit": 1, "count": 1},
+            "error": None,
+        }
+        existing_record = {
+            "record_type": "collection_result",
+            "run_id": "run-1",
+            "channel": "web",
+            "operation": "read",
+            "input": "https://example.com/old",
+            "intent": "official_docs",
+            "result": existing_result,
+        }
+        ledger_path.write_text(json.dumps(existing_record) + "\n", encoding="utf-8")
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "run_id": "run-1",
+                    "queries": [
+                        {
+                            "query_id": "q01",
+                            "channel": "web",
+                            "operation": "read",
+                            "input": "https://example.com/old",
+                            "limit": 1,
+                            "intent": "official_docs",
+                            "source_role": "web_discovery",
+                        },
+                        {
+                            "query_id": "q02",
+                            "channel": "web",
+                            "operation": "read",
+                            "input": "https://example.com/new",
+                            "limit": 1,
+                            "intent": "official_docs",
+                            "source_role": "web_discovery",
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": "new", "title": "New", "url": value}],
+                    "raw": None,
+                    "meta": {"input": value, "limit": limit, "count": 1},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.batch.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "batch",
+                    "--plan",
+                    str(plan_path),
+                    "--save",
+                    str(ledger_path),
+                    "--resume",
+                    "--concurrency",
+                    "2",
+                    "--checkpoint-every",
+                    "1",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["summary"]["skipped"] == 1
+        assert payload["summary"]["ok"] == 1
+        assert payload["queries"][0]["status"] == "skipped"
+        assert payload["queries"][1]["status"] == "ok"
+        records = [json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines()]
+        assert len(records) == 2
+        assert records[1]["query_id"] == "q02"
+
+    def test_batch_save_dir_writes_shards(self, capsys, monkeypatch, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        save_dir = tmp_path / "ledger"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "run_id": "run-2",
+                    "queries": [
+                        {
+                            "query_id": "q01",
+                            "channel": "web",
+                            "operation": "read",
+                            "input": "https://example.com/a",
+                            "limit": 1,
+                        },
+                        {
+                            "query_id": "q02",
+                            "channel": "rss",
+                            "operation": "read",
+                            "input": "https://example.com/feed.xml",
+                            "limit": 2,
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None, body_mode=None, crawl_query=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": value, "title": value, "url": value}],
+                    "raw": None,
+                    "meta": {"input": value, "limit": limit, "count": 1},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.batch.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "batch",
+                    "--plan",
+                    str(plan_path),
+                    "--save-dir",
+                    str(save_dir),
+                    "--shard-by",
+                    "channel-operation",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["save_mode"] == "sharded"
+        assert payload["shard_by"] == "channel-operation"
+        assert sorted(Path(path).name for path in payload["save_targets"]) == [
+            "rss__read.jsonl",
+            "web__read.jsonl",
+        ]
+        assert (save_dir / "web__read.jsonl").exists()
+        assert (save_dir / "rss__read.jsonl").exists()
+
+    def test_batch_shard_by_requires_save_dir(self, capsys):
+        assert (
+            main(
+                [
+                    "batch",
+                    "--plan",
+                    "plan.json",
+                    "--save",
+                    "evidence.jsonl",
+                    "--shard-by",
+                    "channel",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "shard-by is only supported with --save-dir" in captured.err
+
+    def test_batch_validates_query_options_from_operation_contract(self, capsys, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        ledger_path = tmp_path / "evidence.jsonl"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "queries": [
+                        {
+                            "channel": "web",
+                            "operation": "read",
+                            "input": "https://example.com",
+                            "body_mode": "snippet",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        assert (
+            main(
+                [
+                    "batch",
+                    "--plan",
+                    str(plan_path),
+                    "--save",
+                    str(ledger_path),
+                    "--json",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "query 1 is invalid" in captured.err
+        assert "body_mode" in captured.err
+
+    def test_batch_requires_crawl4ai_query_from_operation_contract(self, capsys, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        ledger_path = tmp_path / "evidence.jsonl"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "queries": [
+                        {
+                            "channel": "crawl4ai",
+                            "operation": "crawl",
+                            "input": "https://example.com",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        assert (
+            main(
+                [
+                    "batch",
+                    "--plan",
+                    str(plan_path),
+                    "--save",
+                    str(ledger_path),
+                    "--json",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "crawl4ai crawl requires query" in captured.err
+
+    def test_ledger_merge_command(self, capsys, tmp_path):
+        source_dir = tmp_path / "ledger"
+        source_dir.mkdir()
+        (source_dir / "web.jsonl").write_text('{"record_type":"collection_result","id":"1"}\n', encoding="utf-8")
+        (source_dir / "rss.jsonl").write_text('{"record_type":"collection_result","id":"2"}\n', encoding="utf-8")
+        output_path = tmp_path / "merged.jsonl"
+
+        assert (
+            main(
+                [
+                    "ledger",
+                    "merge",
+                    "--input",
+                    str(source_dir),
+                    "--output",
+                    str(output_path),
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["command"] == "ledger merge"
+        assert payload["files_merged"] == 2
+        assert payload["records_written"] == 2
+        assert len(output_path.read_text(encoding="utf-8").splitlines()) == 2
+
     def test_channels_json(self, capsys):
         assert main(["channels", "github", "--json"]) == 0
         payload = json.loads(capsys.readouterr().out)
         assert payload["channel"]["name"] == "github"
         assert payload["channel"]["entrypoint_kind"] == "cli"
+        assert payload["channel"]["operation_contracts"]["read"]["input_kind"] == "repository"
 
     def test_export_integration_json(self, capsys):
         assert main(["export-integration", "--client", "codex", "--format", "json"]) == 0
@@ -546,6 +1266,8 @@ class TestCLI:
         assert payload["execution_context"] == "checkout"
         assert payload["mcp_snippet"]["mcpServers"]["exa"]["url"] == "https://mcp.exa.ai/mcp"
         assert payload["python_sdk"]["availability"] == "project_env_only"
+        channel_contracts = {channel["name"]: channel for channel in payload["channels"]}
+        assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][0]["name"] == "body_mode"
 
     def test_check_update_json(self, capsys, monkeypatch):
         monkeypatch.setattr(

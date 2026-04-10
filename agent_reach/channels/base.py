@@ -6,6 +6,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple
 
+_DEFAULT_INPUT_KINDS = {
+    "search": "query",
+    "read": "resource",
+    "user": "profile",
+    "user_posts": "profile",
+    "tweet": "post",
+    "crawl": "url",
+}
+
 
 class Channel(ABC):
     """A research source that Agent Reach can diagnose for availability."""
@@ -22,6 +31,9 @@ class Channel(ABC):
     example_invocations: List[str] = []
     supports_probe: bool = False
     install_hints: List[str] = []
+    operation_inputs: dict[str, str] = {}
+    operation_limit_support: dict[str, bool] = {}
+    operation_options: dict[str, list[dict[str, Any]]] = {}
 
     @abstractmethod
     def can_handle(self, url: str) -> bool:
@@ -50,6 +62,22 @@ class Channel(ABC):
         status, message = self.probe(config)
         return status, message, {}
 
+    def get_operation_contracts(self) -> dict[str, dict[str, Any]]:
+        """Return per-operation capability contracts for external controllers."""
+
+        contracts: dict[str, dict[str, Any]] = {}
+        for operation in self.operations:
+            contracts[operation] = {
+                "name": operation,
+                "input_kind": self.operation_inputs.get(
+                    operation,
+                    _DEFAULT_INPUT_KINDS.get(operation, "text"),
+                ),
+                "accepts_limit": self.operation_limit_support.get(operation, True),
+                "options": [dict(option) for option in self.operation_options.get(operation, [])],
+            }
+        return contracts
+
     def to_contract(self) -> dict:
         """Return the machine-readable channel contract."""
 
@@ -66,4 +94,5 @@ class Channel(ABC):
             "example_invocations": list(self.example_invocations),
             "supports_probe": self.supports_probe,
             "install_hints": list(self.install_hints),
+            "operation_contracts": self.get_operation_contracts(),
         }

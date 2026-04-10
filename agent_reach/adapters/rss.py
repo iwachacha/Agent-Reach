@@ -7,7 +7,13 @@ import time
 
 import feedparser
 
-from agent_reach.results import CollectionResult, NormalizedItem, build_item, parse_timestamp
+from agent_reach.results import (
+    CollectionResult,
+    NormalizedItem,
+    build_item,
+    build_pagination_meta,
+    parse_timestamp,
+)
 from agent_reach.source_hints import rss_source_hints
 
 from .base import BaseAdapter
@@ -74,5 +80,12 @@ class RSSAdapter(BaseAdapter):
                 limit=limit,
                 started_at=started_at,
                 feed_title=parsed.feed.get("title"),
+                **build_pagination_meta(
+                    limit=limit,
+                    page_size=len(getattr(parsed, "entries", [])),
+                    pages_fetched=1,
+                    has_more=len(getattr(parsed, "entries", [])) > len(entries),
+                    total_available=len(getattr(parsed, "entries", [])),
+                ),
             ),
         )

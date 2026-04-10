@@ -20,6 +20,10 @@ class GitHubChannel(Channel):
     auth_kind = "token"
     entrypoint_kind = "cli"
     operations = ["search", "read"]
+    operation_inputs = {
+        "search": "query",
+        "read": "repository",
+    }
     required_commands = ["gh"]
     host_patterns = ["https://github.com/*", "https://api.github.com/*"]
     example_invocations = [

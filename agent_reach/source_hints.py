@@ -66,3 +66,21 @@ def bluesky_source_hints(published_at: str | None) -> SourceHints:
         published_at=published_at,
         volatility_hint="high",
     )
+
+
+def search_result_source_hints(published_at: str | None) -> SourceHints:
+    return build_source_hints(
+        source_kind="search_result",
+        authority_hint="search_index",
+        published_at=published_at,
+        volatility_hint="high",
+    )
+
+
+def page_source_hints(published_at: str | None) -> SourceHints:
+    return build_source_hints(
+        source_kind="page",
+        authority_hint="unknown",
+        published_at=published_at,
+        volatility_hint="unknown",
+    )

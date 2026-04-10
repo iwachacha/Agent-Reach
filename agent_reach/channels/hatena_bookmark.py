@@ -16,6 +16,7 @@ class HatenaBookmarkChannel(Channel):
     auth_kind = "none"
     entrypoint_kind = "python"
     operations = ["read"]
+    operation_inputs = {"read": "url"}
     host_patterns = [
         "http://*",
         "https://*",

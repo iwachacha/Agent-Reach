@@ -21,6 +21,7 @@ class YouTubeChannel(Channel):
     auth_kind = "runtime"
     entrypoint_kind = "cli"
     operations = ["read"]
+    operation_inputs = {"read": "url"}
     required_commands = ["yt-dlp"]
     host_patterns = ["https://www.youtube.com/*", "https://youtu.be/*"]
     example_invocations = [

@@ -158,3 +158,84 @@ def test_candidates_accept_raw_collection_result_jsonl(tmp_path):
     assert payload["summary"]["skipped_records"] == 1
     assert payload["candidates"][0]["title"] == "Raw"
     assert payload["candidates"][0]["extras"]["seen_in"][0]["run_id"] is None
+
+
+def test_candidates_summary_only_omits_candidate_bodies(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    result = _result(items=[_item("1", "https://example.com/1", "One")])
+    _write_jsonl(path, [build_ledger_record(result, run_id="run-1")])
+
+    payload = build_candidates_payload(path, by="url", limit=20, summary_only=True)
+
+    assert payload["summary_only"] is True
+    assert payload["summary"]["candidate_count"] == 1
+    assert payload["candidates"] == []
+
+
+def test_candidates_fields_filter_and_relevance_metadata(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    result = _result(items=[_item("1", "https://example.com/1", "One")])
+    _write_jsonl(
+        path,
+        [
+            build_ledger_record(
+                result,
+                run_id="run-1",
+                input_value="topic",
+                intent="official_docs",
+                query_id="q01",
+                source_role="web_discovery",
+            )
+        ],
+    )
+
+    payload = build_candidates_payload(
+        path,
+        by="url",
+        limit=20,
+        fields="title,url,intent,query_id,source_role",
+    )
+
+    assert payload["fields"] == ["title", "url", "intent", "query_id", "source_role"]
+    assert payload["candidates"] == [
+        {
+            "title": "One",
+            "url": "https://example.com/1",
+            "intent": "official_docs",
+            "query_id": "q01",
+            "source_role": "web_discovery",
+        }
+    ]
+
+
+def test_candidates_unknown_field_reports_error(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    _write_jsonl(path, [build_ledger_record(_result(), run_id="run-1")])
+
+    with pytest.raises(CandidatePlanError):
+        build_candidates_payload(path, fields="title,nope")
+
+
+def test_candidates_records_alternate_urls_for_duplicate(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    first = _result(
+        items=[_item("1", "https://example.com/post/", "One")],
+    )
+    second = _result(
+        items=[_item("2", "https://example.com/post#section", "Two")],
+    )
+    _write_jsonl(
+        path,
+        [
+            build_ledger_record(first, run_id="run-1"),
+            build_ledger_record(second, run_id="run-1"),
+        ],
+    )
+
+    payload = build_candidates_payload(path, by="url", limit=20)
+
+    assert payload["summary"]["candidate_count"] == 1
+    assert payload["candidates"][0]["extras"]["candidate_key"] == "url:https://example.com/post"
+    assert payload["candidates"][0]["extras"]["alternate_urls"] == [
+        "https://example.com/post#section"
+    ]

@@ -16,6 +16,21 @@ class QiitaChannel(Channel):
     auth_kind = "none"
     entrypoint_kind = "python"
     operations = ["search"]
+    operation_inputs = {"search": "query"}
+    operation_options = {
+        "search": [
+            {
+                "name": "body_mode",
+                "type": "string",
+                "required": False,
+                "default": "full",
+                "choices": ["none", "snippet", "full"],
+                "cli_flag": "--body-mode",
+                "sdk_kwarg": "body_mode",
+                "description": "Control how much Qiita article body text is retained in items and raw payloads.",
+            }
+        ]
+    }
     host_patterns = ["https://qiita.com/*", "https://qiita.com/api/v2/*"]
     example_invocations = [
         'agent-reach collect --channel qiita --operation search --input "python user:Qiita" --limit 10 --json',

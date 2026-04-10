@@ -329,7 +329,7 @@ class TwitterAdapter(BaseAdapter):
             )
 
         try:
-            raw = json.loads(result.stdout or "{}")
+            parsed_raw = json.loads(result.stdout or "{}")
         except json.JSONDecodeError:
             return self.error_result(
                 operation,
@@ -338,4 +338,12 @@ class TwitterAdapter(BaseAdapter):
                 raw=raw_output,
                 meta=self.make_meta(value=value, limit=limit, started_at=started_at),
             )
-        return raw, raw_output
+        if not isinstance(parsed_raw, dict):
+            return self.error_result(
+                operation,
+                code="invalid_response",
+                message=f"Twitter {operation} returned an unexpected JSON payload",
+                raw=parsed_raw,
+                meta=self.make_meta(value=value, limit=limit, started_at=started_at),
+            )
+        return parsed_raw, raw_output

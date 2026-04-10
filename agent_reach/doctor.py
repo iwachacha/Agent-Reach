@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from agent_reach.channels import get_all_channels
 from agent_reach.config import Config
@@ -69,6 +69,7 @@ def check_all(config: Config, probe: bool = False) -> Dict[str, dict]:
                 "example_invocations": list(getattr(channel, "example_invocations", [])),
                 "supports_probe": bool(getattr(channel, "supports_probe", False)),
                 "install_hints": list(getattr(channel, "install_hints", [])),
+                "operation_contracts": getattr(channel, "get_operation_contracts", lambda: {})(),
             }
         )
 
@@ -135,17 +136,20 @@ def make_doctor_payload(results: Dict[str, dict], probe: bool = False) -> dict:
 def format_report(results: Dict[str, dict], probe: bool = False) -> str:
     """Render a compact terminal-friendly health report."""
 
+    escape_markup: Callable[[str], str]
     try:
-        from rich.markup import escape
+        from rich.markup import escape as rich_escape
+
+        escape_markup = rich_escape
     except ImportError:
 
-        def escape(value: str) -> str:
+        def escape_markup(value: str) -> str:
             return value
 
     def render_line(result: dict) -> str:
         status = result["status"]
         label_name = result.get("description") or result.get("name", "unknown")
-        label = f"[bold]{escape(label_name)}[/bold]: {escape(result['message'])}"
+        label = f"[bold]{escape_markup(label_name)}[/bold]: {escape_markup(result['message'])}"
         if status == "ok":
             return f"  [green][OK][/green] {label}"
         if status == "warn":

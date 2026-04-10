@@ -8,6 +8,7 @@ from typing import Dict, Optional
 from agent_reach.adapters import get_adapter
 from agent_reach.channels import get_all_channel_contracts
 from agent_reach.config import Config
+from agent_reach.operation_contracts import OperationContractError, validate_operation_options
 from agent_reach.results import CollectionResult, build_error, build_result
 
 
@@ -43,6 +44,17 @@ class _Namespace:
 
         return self._client.collect(self._channel, "tweet", value, limit=limit)
 
+    def crawl(
+        self,
+        value: str,
+        limit: int | None = None,
+        *,
+        query: str | None = None,
+    ) -> CollectionResult:
+        """Run a bounded crawl operation when supported by this channel."""
+
+        return self._client.collect(self._channel, "crawl", value, limit=limit, crawl_query=query)
+
 
 class AgentReachClient:
     """Public SDK for diagnostics, registry lookups, and read-only collection."""
@@ -59,6 +71,8 @@ class AgentReachClient:
         self.qiita = _Namespace(self, "qiita")
         self.youtube = _Namespace(self, "youtube")
         self.rss = _Namespace(self, "rss")
+        self.searxng = _Namespace(self, "searxng")
+        self.crawl4ai = _Namespace(self, "crawl4ai")
         self.twitter = _Namespace(self, "twitter")
 
     def doctor(self) -> Dict[str, dict]:
@@ -82,7 +96,13 @@ class AgentReachClient:
         return get_all_channel_contracts()
 
     def collect(
-        self, channel: str, operation: str, value: str, limit: int | None = None
+        self,
+        channel: str,
+        operation: str,
+        value: str,
+        limit: int | None = None,
+        body_mode: str | None = None,
+        crawl_query: str | None = None,
     ) -> CollectionResult:
         """Run a supported collection operation and return a stable result envelope."""
 
@@ -143,11 +163,39 @@ class AgentReachClient:
                 ),
             )
 
+        try:
+            validate_operation_options(
+                channel,
+                operation,
+                {
+                    "body_mode": body_mode,
+                    "crawl_query": crawl_query,
+                },
+            )
+        except OperationContractError as exc:
+            return build_result(
+                ok=False,
+                channel=channel,
+                operation=operation,
+                meta={
+                    "input": text_value,
+                    **({"limit": limit} if limit is not None else {}),
+                    **({"body_mode": body_mode} if body_mode is not None else {}),
+                    **({"crawl_query": crawl_query} if crawl_query is not None else {}),
+                },
+                error=build_error(code=exc.code, message=exc.message, details=exc.details),
+            )
+
         method = getattr(adapter, operation)
         try:
-            if limit is None:
-                return method(text_value)
-            return method(text_value, limit=limit)
+            call_kwargs: dict[str, object] = {}
+            if limit is not None:
+                call_kwargs["limit"] = limit
+            if body_mode is not None:
+                call_kwargs["body_mode"] = body_mode
+            if crawl_query is not None:
+                call_kwargs["crawl_query"] = crawl_query
+            return method(text_value, **call_kwargs)
         except Exception as exc:
             return build_result(
                 ok=False,

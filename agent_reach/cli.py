@@ -15,15 +15,25 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from agent_reach import __version__
+from agent_reach.batch import BatchPlanError, render_batch_text, run_batch_plan
 from agent_reach.candidates import (
     CandidatePlanError,
     build_candidates_payload,
     render_candidates_text,
 )
 from agent_reach.client import AgentReachClient
-from agent_reach.ledger import default_run_id, save_collection_result
+from agent_reach.config import normalize_searxng_base_url
+from agent_reach.ledger import default_run_id, merge_ledger_inputs, save_collection_result
 from agent_reach.results import CollectionResult
 from agent_reach.schemas import SCHEMA_VERSION, utc_timestamp
+from agent_reach.scout import (
+    BUDGETS,
+    PRESETS,
+    QUALITY_PROFILES,
+    ScoutPlanError,
+    build_scout_plan,
+    render_scout_text,
+)
 from agent_reach.utils.commands import ensure_command_on_path, find_command
 from agent_reach.utils.paths import (
     get_mcporter_config_path,
@@ -121,7 +131,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_configure.add_argument(
         "key",
         nargs="?",
-        choices=["github-token", "twitter-cookies"],
+        choices=["github-token", "searxng-base-url", "twitter-cookies"],
         help="Configuration key to set",
     )
     p_configure.add_argument("value", nargs="*", help="Value to store")
@@ -159,6 +169,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "--run-id",
         help="Evidence ledger run ID. Defaults to AGENT_REACH_RUN_ID or a UTC timestamp",
     )
+    p_collect.add_argument(
+        "--intent",
+        help="Optional evidence ledger intent label. Requires --save",
+    )
+    p_collect.add_argument(
+        "--query-id",
+        help="Optional evidence ledger query ID. Requires --save",
+    )
+    p_collect.add_argument(
+        "--source-role",
+        help="Optional evidence ledger source role label. Requires --save",
+    )
+    p_collect.add_argument(
+        "--body-mode",
+        choices=["none", "snippet", "full"],
+        help="Control high-volume body storage for qiita search. Defaults to full",
+    )
+    p_collect.add_argument(
+        "--query",
+        help="Channel-specific query string for crawl4ai crawl",
+    )
 
     p_plan = sub.add_parser("plan", help="Build lightweight plans from evidence ledgers")
     plan_sub = p_plan.add_subparsers(dest="plan_command", help="Planning commands")
@@ -180,6 +211,57 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximum candidates to return",
     )
     p_candidates.add_argument("--json", action="store_true", help="Print machine-readable output")
+    p_candidates.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Return summary counts without candidate bodies",
+    )
+    p_candidates.add_argument(
+        "--fields",
+        help="Comma-separated candidate fields to include in output",
+    )
+
+    p_scout = sub.add_parser("scout", help="Build a plan-only capability snapshot")
+    p_scout.add_argument("--topic", required=True, help="Topic echo for the calling workflow")
+    p_scout.add_argument("--budget", choices=BUDGETS, default="auto", help="Research budget hint")
+    p_scout.add_argument(
+        "--quality",
+        choices=QUALITY_PROFILES,
+        default="precision",
+        help="Quality profile hint",
+    )
+    p_scout.add_argument("--preset", choices=PRESETS, help="Optional source-pack seed")
+    p_scout.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="Build the plan without running network collection",
+    )
+    p_scout.add_argument("--json", action="store_true", help="Print machine-readable scout output")
+
+    p_batch = sub.add_parser("batch", help="Run a bounded batch collection plan")
+    p_batch.add_argument("--plan", required=True, help="Research plan JSON path")
+    batch_save_group = p_batch.add_mutually_exclusive_group(required=True)
+    batch_save_group.add_argument("--save", help="Evidence ledger JSONL output path")
+    batch_save_group.add_argument("--save-dir", help="Directory for sharded evidence ledger JSONL outputs")
+    p_batch.add_argument(
+        "--shard-by",
+        choices=["channel", "operation", "channel-operation"],
+        help="Shard key for --save-dir outputs. Defaults to channel",
+    )
+    p_batch.add_argument("--concurrency", type=int, default=1, help="Maximum concurrent collections")
+    p_batch.add_argument("--resume", action="store_true", help="Skip queries already saved in the ledger")
+    p_batch.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=100,
+        help="Emit checkpoint summaries after this many completed queries",
+    )
+    p_batch.add_argument(
+        "--quality",
+        choices=QUALITY_PROFILES,
+        help="Override the plan quality profile hint",
+    )
+    p_batch.add_argument("--json", action="store_true", help="Print machine-readable batch output")
 
     p_channels = sub.add_parser("channels", help="Show the stable channel registry")
     p_channels.add_argument("name", nargs="?", help="Optional stable channel name to inspect")
@@ -196,6 +278,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default="text",
         help="Output format for the integration export",
     )
+
+    p_ledger = sub.add_parser("ledger", help="Manage evidence ledger files")
+    ledger_sub = p_ledger.add_subparsers(dest="ledger_command", help="Ledger commands")
+    p_ledger_merge = ledger_sub.add_parser("merge", help="Merge a ledger file or shard directory into one JSONL file")
+    p_ledger_merge.add_argument("--input", required=True, help="Ledger input file or directory")
+    p_ledger_merge.add_argument("--output", required=True, help="Merged ledger JSONL output path")
+    p_ledger_merge.add_argument("--json", action="store_true", help="Print machine-readable merge output")
 
     p_uninstall = sub.add_parser("uninstall", help="Remove local Agent Reach state and skill files")
     p_uninstall.add_argument("--dry-run", action="store_true", help="Preview what would be removed")
@@ -241,6 +330,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _cmd_collect(args)
     if args.command == "plan":
         return _cmd_plan(args)
+    if args.command == "scout":
+        return _cmd_scout(args)
+    if args.command == "batch":
+        return _cmd_batch(args)
+    if args.command == "ledger":
+        return _cmd_ledger(args)
     if args.command == "channels":
         return _cmd_channels(args)
     if args.command == "export-integration":
@@ -778,6 +873,14 @@ def _cmd_configure(args) -> int:
                 print(f"Could not update gh auth automatically: {exc}")
         return 0
 
+    if args.key == "searxng-base-url":
+        if not value:
+            raise SystemExit("searxng-base-url requires a value")
+        normalized = normalize_searxng_base_url(value)
+        config.set("searxng_base_url", normalized)
+        print(f"Saved searxng_base_url to config: {normalized}")
+        return 0
+
     if args.key == "twitter-cookies":
         if not value:
             raise SystemExit("twitter-cookies requires a cookie header string or two values")
@@ -922,9 +1025,39 @@ def _cmd_collect(args) -> int:
     if args.max_text_chars is not None and args.max_text_chars < 1:
         print("max-text-chars must be greater than or equal to 1", file=sys.stderr)
         return 2
+    annotations = [args.intent, args.query_id, args.source_role]
+    if any(value is not None for value in annotations) and not args.save:
+        print("intent, query-id, and source-role require --save", file=sys.stderr)
+        return 2
+    if args.body_mode and (args.channel != "qiita" or args.operation != "search"):
+        print("body-mode is only supported for qiita search", file=sys.stderr)
+        return 2
+    if args.query and (args.channel != "crawl4ai" or args.operation != "crawl"):
+        print("query is only supported for crawl4ai crawl", file=sys.stderr)
+        return 2
+    if args.channel == "crawl4ai" and args.operation == "crawl" and not args.query:
+        print("crawl4ai crawl requires --query", file=sys.stderr)
+        return 2
 
     client = AgentReachClient()
-    payload = client.collect(args.channel, args.operation, args.input, limit=args.limit)
+    if args.query:
+        payload = client.collect(
+            args.channel,
+            args.operation,
+            args.input,
+            limit=args.limit,
+            crawl_query=args.query,
+        )
+    elif args.body_mode:
+        payload = client.collect(
+            args.channel,
+            args.operation,
+            args.input,
+            limit=args.limit,
+            body_mode=args.body_mode,
+        )
+    else:
+        payload = client.collect(args.channel, args.operation, args.input, limit=args.limit)
     if args.json:
         _print_json(payload)
     else:
@@ -937,6 +1070,9 @@ def _cmd_collect(args) -> int:
                 payload,
                 run_id=args.run_id or default_run_id(),
                 input_value=args.input,
+                intent=args.intent,
+                query_id=args.query_id,
+                source_role=args.source_role,
             )
         except (OSError, TypeError, ValueError) as exc:
             print(f"Could not save evidence ledger: {exc}", file=sys.stderr)
@@ -945,7 +1081,7 @@ def _cmd_collect(args) -> int:
     if payload["ok"]:
         return 0
     error = payload["error"]
-    if error and error["code"] in {"unknown_channel", "unsupported_operation", "invalid_input"}:
+    if error and error["code"] in {"unknown_channel", "unsupported_operation", "invalid_input", "unsupported_option"}:
         return 2
     return 1
 
@@ -962,7 +1098,13 @@ def _cmd_plan_candidates(args) -> int:
         print("limit must be greater than or equal to 1", file=sys.stderr)
         return 2
     try:
-        payload = build_candidates_payload(args.input, by=args.by, limit=args.limit)
+        payload = build_candidates_payload(
+            args.input,
+            by=args.by,
+            limit=args.limit,
+            summary_only=args.summary_only,
+            fields=args.fields,
+        )
     except CandidatePlanError as exc:
         print(f"Could not plan candidates: {exc}", file=sys.stderr)
         return 2
@@ -971,6 +1113,83 @@ def _cmd_plan_candidates(args) -> int:
         _print_json(payload)
     else:
         print(render_candidates_text(payload))
+    return 0
+
+
+def _cmd_scout(args) -> int:
+    if not args.plan_only:
+        print("scout currently requires --plan-only", file=sys.stderr)
+        return 2
+    try:
+        payload = build_scout_plan(
+            args.topic,
+            budget=args.budget,
+            quality=args.quality,
+            preset=args.preset,
+        )
+    except ScoutPlanError as exc:
+        print(f"Could not build scout plan: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        _print_json(payload)
+    else:
+        print(render_scout_text(payload))
+    return 0
+
+
+def _cmd_batch(args) -> int:
+    if args.shard_by and not args.save_dir:
+        print("shard-by is only supported with --save-dir", file=sys.stderr)
+        return 2
+    try:
+        payload, exit_code = run_batch_plan(
+            args.plan,
+            save_path=args.save,
+            save_dir=args.save_dir,
+            shard_by=args.shard_by or "channel",
+            concurrency=args.concurrency,
+            resume=args.resume,
+            checkpoint_every=args.checkpoint_every,
+            quality=args.quality,
+        )
+    except BatchPlanError as exc:
+        print(f"Could not run batch plan: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        _print_json(payload)
+    else:
+        print(render_batch_text(payload))
+    return exit_code
+
+
+def _cmd_ledger(args) -> int:
+    if args.ledger_command == "merge":
+        return _cmd_ledger_merge(args)
+    print("ledger requires a subcommand", file=sys.stderr)
+    return 2
+
+
+def _cmd_ledger_merge(args) -> int:
+    try:
+        payload = merge_ledger_inputs(args.input, args.output)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print(f"Could not merge ledgers: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        _print_json(payload)
+    else:
+        print(
+            "\n".join(
+                [
+                    "Agent Reach Ledger Merge",
+                    "========================================",
+                    f"Input: {payload['input']}",
+                    f"Output: {payload['output']}",
+                    f"Files merged: {payload['files_merged']}",
+                    f"Records written: {payload['records_written']}",
+                ]
+            )
+        )
     return 0
 
 
@@ -990,6 +1209,17 @@ def _render_channels_text(contracts: Sequence[dict]) -> str:
         )
         if contract.get("operations"):
             lines.append(f"  operations: {', '.join(contract['operations'])}")
+        operation_contracts = contract.get("operation_contracts") or {}
+        for operation in contract.get("operations") or []:
+            details = operation_contracts.get(operation) or {}
+            option_names = [option.get("name") for option in details.get("options", []) if option.get("name")]
+            option_suffix = f" | options: {', '.join(option_names)}" if option_names else ""
+            lines.append(
+                "  "
+                f"- {operation}: input={details.get('input_kind', 'text')} "
+                f"| limit={'yes' if details.get('accepts_limit', False) else 'no'}"
+                f"{option_suffix}"
+            )
         lines.append(f"  probe: {'yes' if contract['supports_probe'] else 'no'}")
         if contract["required_commands"]:
             lines.append(f"  commands: {', '.join(contract['required_commands'])}")

@@ -26,6 +26,12 @@ class TwitterChannel(Channel):
     auth_kind = "cookie"
     entrypoint_kind = "cli"
     operations = ["search", "user", "user_posts", "tweet"]
+    operation_inputs = {
+        "search": "query",
+        "user": "profile",
+        "user_posts": "profile",
+        "tweet": "post",
+    }
     required_commands = ["twitter"]
     host_patterns = ["https://x.com/*", "https://twitter.com/*"]
     example_invocations = [

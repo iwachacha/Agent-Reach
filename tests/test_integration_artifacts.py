@@ -87,6 +87,9 @@ def test_export_points_at_existing_checkout_artifacts():
     assert all(Path(path).exists() for path in payload["recommended_docs"])
     assert any(path.endswith("field-research-improvements-2026-04-10.md") for path in payload["recommended_docs"])
     assert any(path.endswith("agent-reach-nexus-concept.md") for path in payload["recommended_docs"])
+    channel_contracts = {channel["name"]: channel for channel in payload["channels"]}
+    assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][0]["name"] == "body_mode"
+    assert channel_contracts["crawl4ai"]["operation_contracts"]["crawl"]["options"][0]["sdk_kwarg"] == "crawl_query"
     assert payload["skill"]["targets"]
     assert Path(payload["skill"]["source"]).exists()
     assert payload["python_sdk"]["availability"] == "project_env_only"

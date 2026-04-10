@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 from urllib.parse import urlsplit, urlunsplit
 
 from agent_reach.schemas import SCHEMA_VERSION, utc_timestamp
@@ -13,6 +13,22 @@ from agent_reach.schemas import SCHEMA_VERSION, utc_timestamp
 
 class CandidatePlanError(Exception):
     """Raised when candidate planning input cannot be read or parsed."""
+
+
+ALLOWED_CANDIDATE_FIELDS = {
+    "id",
+    "kind",
+    "title",
+    "url",
+    "text",
+    "author",
+    "published_at",
+    "source",
+    "intent",
+    "query_id",
+    "source_role",
+    "extras",
+}
 
 
 def canonicalize_url(url: str | None) -> str | None:
@@ -43,6 +59,8 @@ def build_candidates_payload(
     *,
     by: str = "url",
     limit: int = 20,
+    summary_only: bool = False,
+    fields: Sequence[str] | str | None = None,
 ) -> dict[str, Any]:
     """Read evidence JSONL and return a deduped candidate payload."""
 
@@ -50,6 +68,7 @@ def build_candidates_payload(
         raise CandidatePlanError(f"Unsupported dedupe mode: {by}")
     if limit < 1:
         raise CandidatePlanError("limit must be greater than or equal to 1")
+    selected_fields = _normalize_fields(fields)
 
     evidence_path = Path(path)
     records, skipped_records = _read_collection_records(evidence_path)
@@ -70,6 +89,9 @@ def build_candidates_payload(
             if key is None:
                 skipped_items += 1
                 continue
+            intent = _metadata_value(record, result, item, "intent")
+            query_id = _metadata_value(record, result, item, "query_id")
+            source_role = _metadata_value(record, result, item, "source_role")
 
             sighting = {
                 "run_id": record.get("run_id"),
@@ -79,17 +101,28 @@ def build_candidates_payload(
                 "item_id": item.get("id"),
                 "url": item.get("url"),
             }
+            _add_if_present(sighting, "intent", intent)
+            _add_if_present(sighting, "query_id", query_id)
+            _add_if_present(sighting, "source_role", source_role)
 
             if key in by_key:
                 by_key[key]["extras"]["seen_in"].append(sighting)
+                _fill_missing_candidate_metadata(by_key[key], intent, query_id, source_role)
+                _append_alternate_url(by_key[key], item.get("url"))
                 continue
 
             candidate = _candidate_from_item(item)
+            candidate["intent"] = intent
+            candidate["query_id"] = query_id
+            candidate["source_role"] = source_role
             candidate["extras"]["seen_in"] = [sighting]
+            candidate["extras"]["candidate_key"] = key
+            candidate["extras"].setdefault("alternate_urls", [])
             by_key[key] = candidate
             candidates.append(candidate)
 
     returned = candidates[:limit]
+    output_candidates = [] if summary_only else [_filter_candidate(candidate, selected_fields) for candidate in returned]
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": utc_timestamp(),
@@ -97,6 +130,8 @@ def build_candidates_payload(
         "input": str(evidence_path),
         "by": by,
         "limit": limit,
+        "summary_only": summary_only,
+        "fields": list(selected_fields) if selected_fields is not None else None,
         "summary": {
             "records": len(records) + skipped_records,
             "collection_results": len(records),
@@ -106,7 +141,7 @@ def build_candidates_payload(
             "candidate_count": len(candidates),
             "returned": len(returned),
         },
-        "candidates": returned,
+        "candidates": output_candidates,
     }
 
 
@@ -166,6 +201,9 @@ def _collection_record_from_json(record: Any) -> dict[str, Any] | None:
             return {
                 "run_id": record.get("run_id"),
                 "input": record.get("input"),
+                "intent": record.get("intent"),
+                "query_id": record.get("query_id"),
+                "source_role": record.get("source_role"),
                 "result": result,
             }
         return None
@@ -175,6 +213,9 @@ def _collection_record_from_json(record: Any) -> dict[str, Any] | None:
         return {
             "run_id": record.get("run_id"),
             "input": meta.get("input"),
+            "intent": meta.get("intent"),
+            "query_id": meta.get("query_id"),
+            "source_role": meta.get("source_role"),
             "result": record,
         }
     return None
@@ -188,7 +229,8 @@ def _is_collection_result(value: Any) -> bool:
 
 
 def _candidate_from_item(item: dict[str, Any]) -> dict[str, Any]:
-    extras = item.get("extras") if isinstance(item.get("extras"), dict) else {}
+    raw_extras = item.get("extras")
+    extras: dict[str, Any] = raw_extras if isinstance(raw_extras, dict) else {}
     return {
         "id": item.get("id"),
         "kind": item.get("kind"),
@@ -198,8 +240,85 @@ def _candidate_from_item(item: dict[str, Any]) -> dict[str, Any]:
         "author": item.get("author"),
         "published_at": item.get("published_at"),
         "source": item.get("source"),
+        "intent": extras.get("intent"),
+        "query_id": extras.get("query_id"),
+        "source_role": extras.get("source_role"),
         "extras": {**extras},
     }
+
+
+def _metadata_value(
+    record: dict[str, Any],
+    result: dict[str, Any],
+    item: dict[str, Any],
+    name: str,
+) -> Any:
+    raw_meta = result.get("meta")
+    raw_extras = item.get("extras")
+    meta: dict[str, Any] = raw_meta if isinstance(raw_meta, dict) else {}
+    extras: dict[str, Any] = raw_extras if isinstance(raw_extras, dict) else {}
+    for source in (record, meta, extras):
+        value = source.get(name)
+        if value is not None:
+            return value
+    return None
+
+
+def _add_if_present(target: dict[str, Any], name: str, value: Any) -> None:
+    if value is not None:
+        target[name] = value
+
+
+def _fill_missing_candidate_metadata(
+    candidate: dict[str, Any],
+    intent: Any,
+    query_id: Any,
+    source_role: Any,
+) -> None:
+    if candidate.get("intent") is None and intent is not None:
+        candidate["intent"] = intent
+    if candidate.get("query_id") is None and query_id is not None:
+        candidate["query_id"] = query_id
+    if candidate.get("source_role") is None and source_role is not None:
+        candidate["source_role"] = source_role
+
+
+def _append_alternate_url(candidate: dict[str, Any], url: Any) -> None:
+    if not url:
+        return
+    text = str(url)
+    if not text or text == candidate.get("url"):
+        return
+    alternates = candidate.setdefault("extras", {}).setdefault("alternate_urls", [])
+    if text not in alternates:
+        alternates.append(text)
+
+
+def _normalize_fields(fields: Sequence[str] | str | None) -> tuple[str, ...] | None:
+    if fields is None:
+        return None
+    if isinstance(fields, str):
+        values = tuple(item.strip() for item in fields.split(",") if item.strip())
+    else:
+        values = tuple(str(item).strip() for item in fields if str(item).strip())
+    if not values:
+        raise CandidatePlanError("fields must include at least one field name")
+    unknown = sorted(set(values) - ALLOWED_CANDIDATE_FIELDS)
+    if unknown:
+        supported = ", ".join(sorted(ALLOWED_CANDIDATE_FIELDS))
+        raise CandidatePlanError(
+            f"Unsupported candidate field(s): {', '.join(unknown)}. Supported fields: {supported}"
+        )
+    return values
+
+
+def _filter_candidate(
+    candidate: dict[str, Any],
+    fields: tuple[str, ...] | None,
+) -> dict[str, Any]:
+    if fields is None:
+        return candidate
+    return {field: candidate.get(field) for field in fields}
 
 
 def _dedupe_key(

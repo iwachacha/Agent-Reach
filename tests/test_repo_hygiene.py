@@ -41,7 +41,7 @@ def test_docs_folder_only_contains_supported_docs():
     docs_dir = _repo_root() / "docs"
     names = {path.name for path in docs_dir.iterdir()}
 
-    assert names == {
+    required_docs = {
         "agent-reach-nexus-concept.md",
         "codex-compatibility.md",
         "codex-integration.md",
@@ -51,3 +51,10 @@ def test_docs_folder_only_contains_supported_docs():
         "python-sdk.md",
         "troubleshooting.md",
     }
+    allowed_docs = {
+        *required_docs,
+        "agent-reach-scale-evolution-research-2026-04-10.md",
+    }
+
+    assert required_docs <= names
+    assert names <= allowed_docs

@@ -7,7 +7,13 @@ import json
 import time
 from urllib.parse import urlparse
 
-from agent_reach.results import CollectionResult, NormalizedItem, build_item, parse_timestamp
+from agent_reach.results import (
+    CollectionResult,
+    NormalizedItem,
+    build_item,
+    build_pagination_meta,
+    parse_timestamp,
+)
 from agent_reach.source_hints import github_source_hints
 
 from .base import BaseAdapter
@@ -113,7 +119,16 @@ class GitHubAdapter(BaseAdapter):
             "search",
             items=items,
             raw=raw,
-            meta=self.make_meta(value=query, limit=limit, started_at=started_at),
+            meta=self.make_meta(
+                value=query,
+                limit=limit,
+                started_at=started_at,
+                **build_pagination_meta(
+                    limit=limit,
+                    page_size=len(raw),
+                    pages_fetched=1,
+                ),
+            ),
         )
 
     def read(self, repository: str, limit: int | None = None) -> CollectionResult:

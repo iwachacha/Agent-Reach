@@ -49,6 +49,8 @@ def test_agent_reach_alias_and_namespace_access(tmp_path, monkeypatch):
     assert client.exa_search is client.exa
     assert client.hatena is client.hatena_bookmark
     assert isinstance(legacy, AgentReachClient)
+    assert client.searxng._channel == "searxng"
+    assert client.crawl4ai._channel == "crawl4ai"
     assert client.github.read("openai/openai-python")["ok"] is True
 
 
@@ -91,6 +93,76 @@ def test_collect_reports_unknown_channel(tmp_path, monkeypatch):
 
     assert payload["ok"] is False
     assert payload["error"]["code"] == "unknown_channel"
+
+
+def test_collect_rejects_crawl_query_for_other_channels(tmp_path, monkeypatch):
+    config = Config(config_path=tmp_path / "config.yaml")
+    monkeypatch.setattr("agent_reach.client.get_adapter", lambda channel, config=None: _StubAdapter(config=config))
+    client = AgentReachClient(config=config)
+
+    payload = client.collect("github", "read", "openai/openai-python", crawl_query="docs")
+
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "unsupported_option"
+
+
+def test_collect_requires_crawl_query_for_crawl4ai_crawl(tmp_path, monkeypatch):
+    class _CrawlStubAdapter:
+        def supported_operations(self):
+            return ("crawl",)
+
+        def crawl(self, value, limit=None, crawl_query=None):
+            return build_result(
+                ok=True,
+                channel="crawl4ai",
+                operation="crawl",
+                items=[],
+                raw={"crawl_query": crawl_query},
+                meta={"input": value, "limit": limit},
+                error=None,
+            )
+
+    config = Config(config_path=tmp_path / "config.yaml")
+    monkeypatch.setattr("agent_reach.client.get_adapter", lambda channel, config=None: _CrawlStubAdapter())
+    client = AgentReachClient(config=config)
+
+    missing = client.collect("crawl4ai", "crawl", "https://example.com")
+    assert missing["ok"] is False
+    assert missing["error"]["code"] == "invalid_input"
+
+    payload = client.collect("crawl4ai", "crawl", "https://example.com", crawl_query="pricing")
+    assert payload["ok"] is True
+    assert payload["raw"]["crawl_query"] == "pricing"
+
+
+def test_collect_validates_channel_options_from_contract(tmp_path, monkeypatch):
+    class _QiitaStubAdapter:
+        def supported_operations(self):
+            return ("search",)
+
+        def search(self, value, limit=None, body_mode=None):
+            return build_result(
+                ok=True,
+                channel="qiita",
+                operation="search",
+                items=[],
+                raw={"body_mode": body_mode},
+                meta={"input": value, "body_mode": body_mode},
+                error=None,
+            )
+
+    config = Config(config_path=tmp_path / "config.yaml")
+    monkeypatch.setattr("agent_reach.client.get_adapter", lambda channel, config=None: _QiitaStubAdapter())
+    client = AgentReachClient(config=config)
+
+    invalid = client.collect("qiita", "search", "python", body_mode="invalid")
+    assert invalid["ok"] is False
+    assert invalid["error"]["code"] == "invalid_input"
+    assert invalid["error"]["details"]["choices"] == ["none", "snippet", "full"]
+
+    payload = client.collect("qiita", "search", "python", body_mode="snippet")
+    assert payload["ok"] is True
+    assert payload["raw"]["body_mode"] == "snippet"
 
 
 def test_collect_catches_unexpected_adapter_error(tmp_path, monkeypatch):

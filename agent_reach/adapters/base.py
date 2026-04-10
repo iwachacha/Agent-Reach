@@ -9,7 +9,13 @@ import time
 from typing import Any
 
 from agent_reach.config import Config
-from agent_reach.results import CollectionResult, NormalizedItem, build_error, build_result
+from agent_reach.results import (
+    CollectionResult,
+    NormalizedItem,
+    build_error,
+    build_pagination_meta,
+    build_result,
+)
 from agent_reach.utils.commands import find_command
 
 
@@ -83,6 +89,7 @@ class BaseAdapter:
         }
         if limit is not None:
             meta["limit"] = limit
+            meta.update(build_pagination_meta(limit=limit))
         if started_at is not None:
             meta["duration_ms"] = int((time.perf_counter() - started_at) * 1000)
         meta.update(extra)
@@ -102,6 +109,10 @@ class BaseAdapter:
         qiita_token = env.get("QIITA_TOKEN") or self.config.get("qiita_token")
         if qiita_token:
             env["QIITA_TOKEN"] = str(qiita_token)
+
+        searxng_base_url = env.get("SEARXNG_BASE_URL") or self.config.get("searxng_base_url")
+        if searxng_base_url:
+            env["SEARXNG_BASE_URL"] = str(searxng_base_url)
 
         twitter_auth = env.get("TWITTER_AUTH_TOKEN") or env.get("AUTH_TOKEN") or self.config.get("twitter_auth_token")
         twitter_ct0 = env.get("TWITTER_CT0") or env.get("CT0") or self.config.get("twitter_ct0")

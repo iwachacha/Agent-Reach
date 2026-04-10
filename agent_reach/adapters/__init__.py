@@ -9,17 +9,20 @@ from agent_reach.config import Config
 
 from .base import BaseAdapter
 from .bluesky import BlueskyAdapter
+from .crawl4ai import Crawl4AIAdapter
 from .exa_search import ExaSearchAdapter
 from .github import GitHubAdapter
 from .hatena_bookmark import HatenaBookmarkAdapter
 from .qiita import QiitaAdapter
 from .rss import RSSAdapter
+from .searxng import SearXNGAdapter
 from .twitter import TwitterAdapter
 from .web import WebAdapter
 from .youtube import YouTubeAdapter
 
 ADAPTERS: dict[str, Type[BaseAdapter]] = {
     "bluesky": BlueskyAdapter,
+    "crawl4ai": Crawl4AIAdapter,
     "web": WebAdapter,
     "exa_search": ExaSearchAdapter,
     "github": GitHubAdapter,
@@ -27,6 +30,7 @@ ADAPTERS: dict[str, Type[BaseAdapter]] = {
     "qiita": QiitaAdapter,
     "youtube": YouTubeAdapter,
     "rss": RSSAdapter,
+    "searxng": SearXNGAdapter,
     "twitter": TwitterAdapter,
 }
 
@@ -44,11 +48,13 @@ __all__ = [
     "ADAPTERS",
     "BaseAdapter",
     "BlueskyAdapter",
+    "Crawl4AIAdapter",
     "ExaSearchAdapter",
     "GitHubAdapter",
     "HatenaBookmarkAdapter",
     "QiitaAdapter",
     "RSSAdapter",
+    "SearXNGAdapter",
     "TwitterAdapter",
     "WebAdapter",
     "YouTubeAdapter",

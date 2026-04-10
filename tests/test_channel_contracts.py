@@ -26,6 +26,17 @@ def test_channel_registry_contract():
         assert isinstance(contract["example_invocations"], list)
         assert isinstance(contract["supports_probe"], bool)
         assert isinstance(contract["install_hints"], list)
+        assert isinstance(contract["operation_contracts"], dict)
+        assert set(contract["operation_contracts"]) == set(contract["operations"])
+        for operation, details in contract["operation_contracts"].items():
+            assert details["name"] == operation
+            assert isinstance(details["input_kind"], str) and details["input_kind"]
+            assert isinstance(details["accepts_limit"], bool)
+            assert isinstance(details["options"], list)
+            for option in details["options"]:
+                assert isinstance(option["name"], str) and option["name"]
+                assert isinstance(option["type"], str) and option["type"]
+                assert isinstance(option["required"], bool)
 
 
 def test_channel_check_contract_with_minimal_runtime(monkeypatch, tmp_path):
@@ -105,8 +116,25 @@ def test_channel_can_handle_contract():
         "qiita": "https://qiita.com/Qiita/items/example",
         "youtube": "https://www.youtube.com/watch?v=abc",
         "rss": "https://example.com/feed.xml",
+        "searxng": "https://example.com",
+        "crawl4ai": "https://example.com",
         "twitter": "https://x.com/openai/status/1",
     }
 
     for channel in get_all_channels():
         assert isinstance(channel.can_handle(samples[channel.name]), bool)
+
+
+def test_specific_operation_contracts_cover_channel_specific_options():
+    contracts = {channel.name: channel.to_contract() for channel in get_all_channels()}
+
+    qiita_search = contracts["qiita"]["operation_contracts"]["search"]
+    assert qiita_search["input_kind"] == "query"
+    assert qiita_search["options"][0]["name"] == "body_mode"
+    assert qiita_search["options"][0]["choices"] == ["none", "snippet", "full"]
+
+    crawl_contract = contracts["crawl4ai"]["operation_contracts"]["crawl"]
+    assert crawl_contract["input_kind"] == "url"
+    assert crawl_contract["options"][0]["name"] == "query"
+    assert crawl_contract["options"][0]["required"] is True
+    assert crawl_contract["options"][0]["sdk_kwarg"] == "crawl_query"

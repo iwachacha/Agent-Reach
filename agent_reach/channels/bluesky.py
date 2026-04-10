@@ -16,6 +16,7 @@ class BlueskyChannel(Channel):
     auth_kind = "none"
     entrypoint_kind = "python"
     operations = ["search"]
+    operation_inputs = {"search": "query"}
     host_patterns = [
         "https://bsky.app/*",
         "https://public.api.bsky.app/*",

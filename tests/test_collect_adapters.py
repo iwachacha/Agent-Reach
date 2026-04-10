@@ -10,11 +10,13 @@ import pytest
 
 from agent_reach.adapters.base import BaseAdapter
 from agent_reach.adapters.bluesky import BlueskyAdapter
+from agent_reach.adapters.crawl4ai import Crawl4AIAdapter
 from agent_reach.adapters.exa_search import ExaSearchAdapter
 from agent_reach.adapters.github import GitHubAdapter
 from agent_reach.adapters.hatena_bookmark import HatenaBookmarkAdapter
 from agent_reach.adapters.qiita import QiitaAdapter
 from agent_reach.adapters.rss import RSSAdapter
+from agent_reach.adapters.searxng import SearXNGAdapter
 from agent_reach.adapters.twitter import TwitterAdapter
 from agent_reach.adapters.web import WebAdapter
 from agent_reach.adapters.youtube import YouTubeAdapter
@@ -60,6 +62,7 @@ def test_web_adapter_success(config, monkeypatch):
     assert payload["meta"]["text_length"] == len("# Example Domain\n\nThis is a test page.")
     assert payload["meta"]["link_count"] == 0
     assert payload["meta"]["extraction_warning"] is None
+    assert payload["meta"]["returned_count"] == 1
     assert payload["items"][0]["extras"]["source_hints"] == {
         "source_kind": "unknown",
         "authority_hint": "unknown",
@@ -313,6 +316,9 @@ def test_bluesky_adapter_success(config, monkeypatch):
     assert payload["meta"]["fallback_used"] is True
     assert payload["meta"]["attempted_host_results"][0]["reason"] == "http_403"
     assert payload["meta"]["attempted_host_results"][1]["reason"] == "ok"
+    assert payload["meta"]["requested_limit"] == 1
+    assert payload["meta"]["page_size"] == 1
+    assert payload["meta"]["pages_fetched"] == 1
     assert payload["items"][0]["extras"]["media"][0]["type"] == "image"
     assert payload["items"][0]["extras"]["media"][0]["aspect_ratio"] == {"width": 4, "height": 3}
     assert payload["items"][0]["extras"]["source_hints"] == {
@@ -410,7 +416,59 @@ def test_qiita_adapter_success(config, monkeypatch):
 
     assert payload["ok"] is True
     assert payload["items"][0]["author"] == "Qiita"
+    assert payload["items"][0]["text"] == "markdown body"
+    assert payload["raw"][0]["body"] == "markdown body"
     assert payload["meta"]["total_count"] == "42"
+    assert payload["meta"]["body_mode"] == "full"
+    assert payload["meta"]["requested_limit"] == 1
+    assert payload["meta"]["page_size"] == 1
+    assert payload["meta"]["pages_fetched"] == 1
+    assert payload["meta"]["total_available"] == 42
+    assert payload["meta"]["has_more"] is True
+
+
+def test_qiita_adapter_body_mode_controls_text_and_raw(config, monkeypatch):
+    body = "x" * 600
+
+    class FakeResponse:
+        status_code = 200
+        text = "[]"
+        headers = {"Total-Count": "1"}
+
+        @staticmethod
+        def json():
+            return [
+                {
+                    "id": "abc123",
+                    "title": "Qiita article",
+                    "url": "https://qiita.com/Qiita/items/abc123",
+                    "body": body,
+                    "created_at": "2026-04-10T00:00:00+09:00",
+                    "updated_at": "2026-04-10T01:00:00+09:00",
+                    "tags": [],
+                    "user": {"id": "Qiita"},
+                }
+            ]
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            return FakeResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.qiita._import_requests", lambda: FakeRequests)
+
+    none_payload = QiitaAdapter(config=config).search("python", limit=1, body_mode="none")
+    snippet_payload = QiitaAdapter(config=config).search("python", limit=1, body_mode="snippet")
+
+    assert none_payload["ok"] is True
+    assert none_payload["items"][0]["text"] is None
+    assert "body" not in none_payload["raw"][0]
+    assert none_payload["meta"]["body_mode"] == "none"
+    assert snippet_payload["items"][0]["text"] == body[:500]
+    assert snippet_payload["raw"][0]["body"] == body[:500]
+    assert snippet_payload["meta"]["body_mode"] == "snippet"
 
 
 def test_github_adapter_read_success(config, monkeypatch):
@@ -537,6 +595,10 @@ def test_rss_adapter_success(config, monkeypatch):
 
     assert payload["ok"] is True
     assert payload["meta"]["feed_title"] == "Example Feed"
+    assert payload["meta"]["page_size"] == 1
+    assert payload["meta"]["pages_fetched"] == 1
+    assert payload["meta"]["total_available"] == 1
+    assert payload["meta"]["has_more"] is False
     assert payload["items"][0]["author"] == "Alice"
     assert payload["items"][0]["extras"]["source_hints"] == {
         "source_kind": "feed_item",
@@ -774,13 +836,227 @@ def test_twitter_adapter_preserves_structured_backend_errors(config, monkeypatch
     assert payload["raw"]["error"]["code"] == "not_found"
 
 
+def test_searxng_adapter_success(config, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = "{}"
+
+        @staticmethod
+        def json():
+            return {
+                "results": [
+                    {
+                        "title": "Example result",
+                        "url": "https://example.com/post",
+                        "content": "A useful snippet",
+                        "publishedDate": "2026-04-10T00:00:00Z",
+                        "engines": ["duckduckgo"],
+                        "category": "general",
+                    }
+                ]
+            }
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            return FakeResponse()
+
+    config.set("searxng_base_url", "https://search.example.com/search")
+    monkeypatch.setattr("agent_reach.adapters.searxng._import_requests", lambda: FakeRequests)
+
+    payload = SearXNGAdapter(config=config).search("agent reach", limit=1)
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["title"] == "Example result"
+    assert payload["items"][0]["extras"]["engines"] == ["duckduckgo"]
+    assert payload["items"][0]["extras"]["source_hints"]["source_kind"] == "search_result"
+    assert payload["meta"]["base_url"] == "https://search.example.com"
+    assert payload["meta"]["requested_limit"] == 1
+    assert payload["meta"]["page_size"] == 1
+    assert payload["meta"]["pages_fetched"] == 1
+
+
+def test_searxng_adapter_requires_config(config):
+    payload = SearXNGAdapter(config=config).search("agent reach", limit=1)
+
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "missing_configuration"
+
+
+def test_searxng_adapter_reports_non_json_instances(config, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = "<html>disabled</html>"
+
+        @staticmethod
+        def json():
+            raise ValueError("not json")
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            return FakeResponse()
+
+    config.set("searxng_base_url", "https://search.example.com")
+    monkeypatch.setattr("agent_reach.adapters.searxng._import_requests", lambda: FakeRequests)
+
+    payload = SearXNGAdapter(config=config).search("agent reach", limit=1)
+
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "invalid_response"
+    assert "format=json" in payload["error"]["message"]
+
+
+def test_crawl4ai_adapter_missing_dependency(config, monkeypatch):
+    monkeypatch.setattr(
+        "agent_reach.adapters.crawl4ai._import_crawl4ai",
+        lambda: (_ for _ in ()).throw(ImportError("missing crawl4ai")),
+    )
+    payload = Crawl4AIAdapter(config=config).read("https://example.com")
+
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "missing_dependency"
+
+
+def test_crawl4ai_adapter_read_success(config, monkeypatch):
+    class FakeMarkdown:
+        raw_markdown = "# Example\n\nRead body"
+
+    class FakeCrawler:
+        def __init__(self, config=None):
+            self.config = config
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def arun(self, url, config=None):
+            return SimpleNamespace(
+                url=url,
+                redirected_url=url,
+                status_code=200,
+                success=True,
+                metadata={"title": "Example", "author": "Alice", "publishedAt": "2026-04-10T00:00:00Z"},
+                markdown=FakeMarkdown(),
+                error_message=None,
+            )
+
+    bundle = SimpleNamespace(
+        AsyncWebCrawler=FakeCrawler,
+        BrowserConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+        CrawlerRunConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+        BestFirstCrawlingStrategy=None,
+        DomainFilter=None,
+        FilterChain=None,
+        KeywordRelevanceScorer=None,
+    )
+    monkeypatch.setattr("agent_reach.adapters.crawl4ai._import_crawl4ai", lambda: bundle)
+
+    payload = Crawl4AIAdapter(config=config).read("https://example.com")
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["title"] == "Example"
+    assert payload["items"][0]["author"] == "Alice"
+    assert payload["items"][0]["published_at"] == "2026-04-10T00:00:00Z"
+    assert payload["raw"]["markdown"] == "# Example\n\nRead body"
+    assert payload["items"][0]["extras"]["source_hints"]["source_kind"] == "page"
+
+
+def test_crawl4ai_adapter_crawl_requires_query(config):
+    payload = Crawl4AIAdapter(config=config).crawl("https://example.com", limit=2)
+
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "invalid_input"
+
+
+def test_crawl4ai_adapter_crawl_success_same_origin_only(config, monkeypatch):
+    class FakeMarkdown:
+        def __init__(self, text):
+            self.raw_markdown = text
+
+    class FakeCrawler:
+        def __init__(self, config=None):
+            self.config = config
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def arun(self, url, config=None):
+            return [
+                SimpleNamespace(
+                    url="https://example.com/start",
+                    redirected_url="https://example.com/start",
+                    status_code=200,
+                    success=True,
+                    metadata={"title": "Start"},
+                    markdown=FakeMarkdown("# Start"),
+                    error_message=None,
+                ),
+                SimpleNamespace(
+                    url="https://example.com/pricing",
+                    redirected_url="https://example.com/pricing",
+                    status_code=200,
+                    success=True,
+                    metadata={"title": "Pricing"},
+                    markdown=FakeMarkdown("# Pricing"),
+                    error_message=None,
+                ),
+                SimpleNamespace(
+                    url="https://other.example.net/offsite",
+                    redirected_url="https://other.example.net/offsite",
+                    status_code=200,
+                    success=True,
+                    metadata={"title": "Offsite"},
+                    markdown=FakeMarkdown("# Offsite"),
+                    error_message=None,
+                ),
+            ]
+
+    bundle = SimpleNamespace(
+        AsyncWebCrawler=FakeCrawler,
+        BrowserConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+        CrawlerRunConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+        BestFirstCrawlingStrategy=lambda **kwargs: SimpleNamespace(**kwargs),
+        DomainFilter=lambda **kwargs: SimpleNamespace(**kwargs),
+        FilterChain=lambda **kwargs: SimpleNamespace(**kwargs),
+        KeywordRelevanceScorer=lambda keywords: SimpleNamespace(keywords=keywords),
+    )
+    monkeypatch.setattr("agent_reach.adapters.crawl4ai._import_crawl4ai", lambda: bundle)
+
+    payload = Crawl4AIAdapter(config=config).crawl(
+        "https://example.com/start",
+        limit=5,
+        crawl_query="pricing faq",
+    )
+
+    assert payload["ok"] is True
+    assert [item["url"] for item in payload["items"]] == [
+        "https://example.com/start",
+        "https://example.com/pricing",
+    ]
+    assert payload["meta"]["skipped_external_count"] == 1
+    assert payload["raw"]["skipped_external_urls"] == ["https://other.example.net/offsite"]
+    assert payload["items"][0]["extras"]["crawl_query"] == "pricing faq"
+
+
 def test_base_adapter_runtime_env_is_noninteractive_and_utf8(config, monkeypatch):
     monkeypatch.delenv("PYTHONIOENCODING", raising=False)
     monkeypatch.delenv("PYTHONUTF8", raising=False)
     config.set("qiita_token", "qiita-token")
+    config.set("searxng_base_url", "https://search.example.com")
 
     env = BaseAdapter(config=config).runtime_env()
 
     assert env["PYTHONIOENCODING"] == "utf-8"
     assert env["PYTHONUTF8"] == "1"
     assert env["QIITA_TOKEN"] == "qiita-token"
+    assert env["SEARXNG_BASE_URL"] == "https://search.example.com"
