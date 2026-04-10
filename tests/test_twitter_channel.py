@@ -18,10 +18,19 @@ def test_check_reports_warn_when_not_installed():
     with patch("agent_reach.channels.twitter.find_command", return_value=None), patch(
         "shutil.which", return_value=None
     ):
-        status, message, extra = TwitterChannel().check()
+        status, message, extra = TwitterChannel().check_detailed()
     assert status == "warn"
     assert "uv tool install twitter-cli" in message
     assert extra["operation_statuses"]["search"]["status"] == "off"
+
+
+def test_check_preserves_two_tuple_contract():
+    with patch("agent_reach.channels.twitter.find_command", return_value=None), patch(
+        "shutil.which", return_value=None
+    ):
+        status, message = TwitterChannel().check()
+    assert status == "warn"
+    assert "twitter-cli" in message
 
 
 def test_check_reports_warn_when_live_operations_are_unverified():
@@ -33,7 +42,7 @@ def test_check_reports_warn_when_live_operations_are_unverified():
         "subprocess.run",
         return_value=_cp(stdout="ok: true\nusername: testuser\n", returncode=0),
     ):
-        status, message, extra = channel.check()
+        status, message, extra = channel.check_detailed()
     assert status == "warn"
     assert "not verified" in message
     assert extra["diagnostic_basis"] == "twitter status"
@@ -49,7 +58,7 @@ def test_check_reports_warn_when_not_authenticated():
         "subprocess.run",
         return_value=_cp(stderr="ok: false\nerror:\n  code: not_authenticated\n", returncode=1),
     ):
-        status, message, extra = channel.check()
+        status, message, extra = channel.check_detailed()
     assert status == "warn"
     assert "configure twitter-cookies" in message
     assert extra["operation_statuses"]["user"]["status"] == "off"
@@ -74,7 +83,7 @@ def test_check_passes_config_credentials_into_status(tmp_path):
         "subprocess.run",
         side_effect=lambda *args, **kwargs: captured.update({"env": kwargs.get("env")}) or _cp(stdout="ok: true", returncode=0),
     ):
-        status, _message, _extra = channel.check(config)
+        status, _message, _extra = channel.check_detailed(config)
 
     assert status == "warn"
     assert captured["env"]["AUTH_TOKEN"] == "auth-token"
@@ -114,7 +123,7 @@ def test_probe_uses_live_user_lookup():
             "error": None,
         },
     ) as mocked_search:
-        status, message, extra = channel.probe()
+        status, message, extra = channel.probe_detailed()
 
     assert status == "ok"
     assert "user lookup and search both succeeded" in message
@@ -159,7 +168,7 @@ def test_probe_reports_search_failure_separately_from_live_user_lookup():
             },
         },
     ):
-        status, message, extra = channel.probe()
+        status, message, extra = channel.probe_detailed()
 
     assert status == "warn"
     assert "Live user lookup succeeded, but live search failed" in message

@@ -25,6 +25,12 @@ _SEARCH_HOSTS = (
 )
 
 
+def _excerpt(value: str, limit: int = 200) -> str:
+    """Keep upstream failure details useful without bloating JSON output."""
+
+    return value[:limit]
+
+
 def _import_requests():
     with warnings.catch_warnings():
         warnings.filterwarnings(
@@ -122,6 +128,7 @@ class BlueskyAdapter(BaseAdapter):
                     {
                         "api_base_url": base_url,
                         "error": "request_exception",
+                        "reason": type(exc).__name__,
                         "message": str(exc),
                     }
                 )
@@ -139,6 +146,8 @@ class BlueskyAdapter(BaseAdapter):
                     {
                         "api_base_url": base_url,
                         "http_status": response.status_code,
+                        "reason": f"http_{response.status_code}",
+                        "body_excerpt": _excerpt(raw_text),
                     }
                 )
                 last_error = (
@@ -156,6 +165,8 @@ class BlueskyAdapter(BaseAdapter):
                     {
                         "api_base_url": base_url,
                         "error": "invalid_json",
+                        "reason": "invalid_json",
+                        "body_excerpt": _excerpt(raw_text),
                     }
                 )
                 last_error = (
@@ -187,6 +198,8 @@ class BlueskyAdapter(BaseAdapter):
                 {
                     "api_base_url": base_url,
                     "http_status": response.status_code,
+                    "reason": "ok",
+                    "post_count": len(posts),
                 }
             )
             items: list[NormalizedItem] = []
@@ -235,6 +248,7 @@ class BlueskyAdapter(BaseAdapter):
                     api_base_url=base_url,
                     fallback_used=index > 0,
                     attempted_hosts=[attempt["api_base_url"] for attempt in attempts],
+                    attempted_host_results=list(attempts),
                 ),
             )
 

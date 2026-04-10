@@ -5,7 +5,7 @@ Agent Reach is a Windows-first integration layer for research tooling. It now ex
 ## What it provides
 
 - a stable channel registry through `agent-reach channels --json`
-- readiness diagnostics through `agent-reach doctor --json`
+- readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses` for downstream routing
 - a thin read-only collector through `agent-reach collect --json`
 - a non-mutating Codex export through `agent-reach export-integration --client codex`
 - repo-local Codex artifacts through `.codex-plugin/plugin.json` and `.mcp.json` when running from a source checkout

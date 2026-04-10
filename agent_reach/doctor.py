@@ -24,6 +24,19 @@ def _normalize_health_result(result: object) -> tuple[str, str, dict[str, Any]]:
     raise ValueError("health checks must return a 2-tuple or 3-tuple")
 
 
+def _default_operation_statuses(contract: dict, status: str, message: str) -> dict[str, dict[str, str]]:
+    """Provide operation-level health when a channel has no richer diagnostic data."""
+
+    return {
+        operation: {
+            "status": status,
+            "message": message,
+            "diagnostic_basis": "channel_health",
+        }
+        for operation in contract.get("operations", [])
+    }
+
+
 def check_all(config: Config, probe: bool = False) -> Dict[str, dict]:
     """Collect health information from every registered channel."""
 
@@ -32,9 +45,11 @@ def check_all(config: Config, probe: bool = False) -> Dict[str, dict]:
         extra: dict[str, Any] = {}
         try:
             if probe and channel.supports_probe:
-                status, message, extra = _normalize_health_result(channel.probe(config))
+                method = getattr(channel, "probe_detailed", channel.probe)
+                status, message, extra = _normalize_health_result(method(config))
             else:
-                status, message, extra = _normalize_health_result(channel.check(config))
+                method = getattr(channel, "check_detailed", channel.check)
+                status, message, extra = _normalize_health_result(method(config))
         except Exception as exc:
             status, message = "error", f"Health check crashed: {exc}"
 
@@ -62,6 +77,8 @@ def check_all(config: Config, probe: bool = False) -> Dict[str, dict]:
             "status": status,
             "message": message,
         }
+        if contract.get("operations") and "operation_statuses" not in extra:
+            payload["operation_statuses"] = _default_operation_statuses(contract, status, message)
         reserved = set(payload)
         payload.update({key: value for key, value in extra.items() if key not in reserved})
         results[channel.name] = payload

@@ -84,3 +84,15 @@ agent-reach collect --channel twitter --operation search --input "OpenAI" --limi
 ```
 
 `twitter status` only proves that the session is authenticated. Twitter/X search can still fail even when profile lookups succeed. If `user` works but `search` fails, treat the search backend as not ready and avoid advertising Twitter/X search as available in downstream automation.
+
+## Raw `twitter --help` fails with `UnicodeEncodeError` on Windows
+
+PowerShell's default legacy code page can make `twitter-cli` crash while rendering help text. Run the raw backend CLI with UTF-8 enabled:
+
+```powershell
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+twitter --help
+```
+
+Agent Reach sets these environment variables when it invokes backend commands, so this mainly affects manual fallback debugging.

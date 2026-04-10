@@ -277,6 +277,8 @@ def test_bluesky_adapter_success(config, monkeypatch):
     assert payload["items"][0]["author"] == "openai.com"
     assert payload["meta"]["api_base_url"] == "https://api.bsky.app"
     assert payload["meta"]["fallback_used"] is True
+    assert payload["meta"]["attempted_host_results"][0]["reason"] == "http_403"
+    assert payload["meta"]["attempted_host_results"][1]["reason"] == "ok"
     assert payload["items"][0]["extras"]["media"][0]["type"] == "image"
     assert payload["items"][0]["extras"]["media"][0]["aspect_ratio"] == {"width": 4, "height": 3}
 

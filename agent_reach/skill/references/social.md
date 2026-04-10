@@ -32,6 +32,14 @@ agent-reach doctor --json --probe
 
 `twitter status` confirms authentication, but it does not guarantee that live search still works.
 
+If raw `twitter --help` fails with `UnicodeEncodeError` on Windows, enable UTF-8 for that shell:
+
+```powershell
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+twitter --help
+```
+
 Or import them from a local browser:
 
 ```powershell

@@ -84,6 +84,10 @@ class TwitterChannel(Channel):
         return "x.com" in host or "twitter.com" in host
 
     def check(self, config=None):
+        status, message, _extra = self.check_detailed(config)
+        return status, message
+
+    def check_detailed(self, config=None):
         twitter = find_command("twitter") or shutil.which("twitter")
         if not twitter:
             return "warn", "twitter-cli is missing. Install it with uv tool install twitter-cli", {
@@ -147,6 +151,10 @@ class TwitterChannel(Channel):
         }
 
     def probe(self, config=None):
+        status, message, _extra = self.probe_detailed(config)
+        return status, message
+
+    def probe_detailed(self, config=None):
         twitter = find_command("twitter") or shutil.which("twitter")
         if not twitter:
             return "warn", "twitter-cli is missing. Install it with uv tool install twitter-cli", {

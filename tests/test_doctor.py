@@ -70,6 +70,7 @@ def test_check_all_collects_channel_results(tmp_config, monkeypatch):
     assert results["web"]["name"] == "web"
     assert results["web"]["description"] == "Any web page"
     assert results["web"]["status"] == "ok"
+    assert results["web"]["operation_statuses"]["read"]["status"] == "ok"
     assert results["github"]["backends"] == ["gh"]
     assert results["twitter"]["tier"] == 1
     assert results["twitter"]["supports_probe"] is True

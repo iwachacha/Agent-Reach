@@ -4,9 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Tuple, TypeAlias
-
-HealthResult: TypeAlias = Tuple[str, str] | Tuple[str, str, dict[str, Any]]
+from typing import Any, List, Tuple
 
 
 class Channel(ABC):
@@ -29,16 +27,28 @@ class Channel(ABC):
     def can_handle(self, url: str) -> bool:
         """Return True when this channel is a natural fit for the URL."""
 
-    def check(self, config=None) -> HealthResult:
+    def check(self, config=None) -> Tuple[str, str]:
         """Return a health tuple: (status, message)."""
 
         summary = ", ".join(self.backends) if self.backends else "configured"
         return "ok", summary
 
-    def probe(self, config=None) -> HealthResult:
+    def probe(self, config=None) -> Tuple[str, str]:
         """Run a lightweight live validation when supported."""
 
         return self.check(config)
+
+    def check_detailed(self, config=None) -> Tuple[str, str, dict[str, Any]]:
+        """Return health plus optional machine-readable diagnostics."""
+
+        status, message = self.check(config)
+        return status, message, {}
+
+    def probe_detailed(self, config=None) -> Tuple[str, str, dict[str, Any]]:
+        """Run a live probe plus optional machine-readable diagnostics."""
+
+        status, message = self.probe(config)
+        return status, message, {}
 
     def to_contract(self) -> dict:
         """Return the machine-readable channel contract."""
