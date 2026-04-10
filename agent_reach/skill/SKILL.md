@@ -24,7 +24,10 @@ Do not assume this fork owns scheduling, ranking, summarization, or publishing. 
 - Default to the globally installed `agent-reach` CLI in any downstream repository.
 - Do not ask the user to copy `.codex-plugin`, `.mcp.json`, `agent_reach/skill`, or Agent Reach source files into the downstream repository unless they explicitly ask for repo-local plugin artifacts.
 - Use `agent-reach collect --json` as the stable handoff. Preserve the returned `CollectionResult` JSON when another system will rank, summarize, dedupe, or publish it.
-- For large research tasks, fan out bounded searches, dedupe in the downstream project, then deep-read only selected URLs.
+- Use `agent-reach collect --json --save .agent-reach/evidence.jsonl` when a research run needs provenance across multiple commands.
+- Use `agent-reach plan candidates --input .agent-reach/evidence.jsonl --json` for lightweight URL or ID dedupe before selected follow-up reads.
+- Treat `extras.source_hints` and web extraction hygiene fields as diagnostics only, not ranking or trust scores.
+- For large research tasks, fan out bounded searches, use `plan candidates` for no-model dedupe, then deep-read only selected URLs.
 - Treat optional channel failures as partial results unless the user asked for strict completeness.
 
 ## Discovery First
@@ -56,22 +59,26 @@ agent-reach export-integration --client codex --format json
 1. Run `agent-reach channels --json` if the available surfaces are unclear.
 2. Run `agent-reach doctor --json` when readiness matters.
 3. Use `--probe` only when a lightweight live check is useful.
-4. Use `agent-reach collect --json` by default when external code needs normalized results.
-5. Use `AgentReachClient` only when the host Python environment has Agent Reach installed into it directly.
-6. Use `qiita` for direct Qiita article search. Use `hatena_bookmark` when the input is a URL and you want Hatena reactions or related entries.
-7. Use `bluesky` for public Bluesky post search.
-8. Prefer `exa_search` plus `web` for note, Zenn, blogs, docs sites, and other general web discovery.
-9. Treat Twitter/X as opt-in and expect cookie-based auth.
-10. In arbitrary downstream repositories, use the globally installed `agent-reach` CLI. Do not require copying Agent Reach repo files into the downstream project unless the user explicitly asks for repo-local plugin artifacts.
+4. Use `agent-reach collect --json` by default when external code needs normalized results, and add `--save .agent-reach/evidence.jsonl` when provenance matters.
+5. Use `agent-reach plan candidates` when a saved ledger needs no-model URL or ID dedupe.
+6. Use diagnostic hints only to explain provenance or extraction shape; downstream code owns ranking and selection.
+7. Use `AgentReachClient` only when the host Python environment has Agent Reach installed into it directly.
+8. Use `qiita` for direct Qiita article search. Use `hatena_bookmark` when the input is a URL and you want Hatena reactions or related entries.
+9. Use `bluesky` for public Bluesky post search.
+10. Prefer `exa_search` plus `web` for note, Zenn, blogs, docs sites, and other general web discovery.
+11. Treat Twitter/X as opt-in and expect cookie-based auth.
+12. In arbitrary downstream repositories, use the globally installed `agent-reach` CLI. Do not require copying Agent Reach repo files into the downstream project unless the user explicitly asks for repo-local plugin artifacts.
 
 ## Large-Scale Research Pattern
 
 1. Run `agent-reach doctor --json` and inspect `operation_statuses` when readiness matters.
 2. Start with 2-4 broad `exa_search` queries at `--limit 5` to `--limit 10`.
 3. Add source-specific searches for `github`, `qiita`, `bluesky`, `rss`, or `twitter` only when they match the task.
-4. Dedupe candidate URLs or IDs before deeper reads.
-5. Use `web read` for selected URLs, not every search result.
-6. Return partial results with clear channel failures instead of blocking on one optional backend.
+4. Save raw `CollectionResult` envelopes with `--save .agent-reach/evidence.jsonl` when the run needs an evidence trail.
+5. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json` before deeper reads.
+6. Use `web read` for selected URLs, not every search result.
+7. Inspect source hints and web hygiene only as non-authoritative diagnostics.
+8. Return partial results with clear channel failures instead of blocking on one optional backend.
 
 ## Command Routing
 

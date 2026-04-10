@@ -15,7 +15,13 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from agent_reach import __version__
+from agent_reach.candidates import (
+    CandidatePlanError,
+    build_candidates_payload,
+    render_candidates_text,
+)
 from agent_reach.client import AgentReachClient
+from agent_reach.ledger import default_run_id, save_collection_result
 from agent_reach.results import CollectionResult
 from agent_reach.schemas import SCHEMA_VERSION, utc_timestamp
 from agent_reach.utils.commands import ensure_command_on_path, find_command
@@ -140,6 +146,40 @@ def _build_parser() -> argparse.ArgumentParser:
     p_collect.add_argument("--input", required=True, help="Input value such as a URL, repo, or query")
     p_collect.add_argument("--limit", type=int, help="Optional item limit for search/read operations")
     p_collect.add_argument("--json", action="store_true", help="Print machine-readable collection output")
+    p_collect.add_argument(
+        "--max-text-chars",
+        type=int,
+        help="Show text snippets up to N characters in text mode only",
+    )
+    p_collect.add_argument(
+        "--save",
+        help="Append the raw CollectionResult envelope to an evidence ledger JSONL file",
+    )
+    p_collect.add_argument(
+        "--run-id",
+        help="Evidence ledger run ID. Defaults to AGENT_REACH_RUN_ID or a UTC timestamp",
+    )
+
+    p_plan = sub.add_parser("plan", help="Build lightweight plans from evidence ledgers")
+    plan_sub = p_plan.add_subparsers(dest="plan_command", help="Planning commands")
+    p_candidates = plan_sub.add_parser(
+        "candidates",
+        help="Return deduped candidates for follow-up reads",
+    )
+    p_candidates.add_argument("--input", required=True, help="Evidence ledger JSONL input path")
+    p_candidates.add_argument(
+        "--by",
+        choices=["url", "id"],
+        default="url",
+        help="Dedupe mode. Defaults to URL, then falls back to source + id",
+    )
+    p_candidates.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum candidates to return",
+    )
+    p_candidates.add_argument("--json", action="store_true", help="Print machine-readable output")
 
     p_channels = sub.add_parser("channels", help="Show the stable channel registry")
     p_channels.add_argument("name", nargs="?", help="Optional stable channel name to inspect")
@@ -199,6 +239,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _cmd_doctor(args)
     if args.command == "collect":
         return _cmd_collect(args)
+    if args.command == "plan":
+        return _cmd_plan(args)
     if args.command == "channels":
         return _cmd_channels(args)
     if args.command == "export-integration":
@@ -840,7 +882,18 @@ def _cmd_doctor(args) -> int:
     return doctor_exit_code(results)
 
 
-def _render_collect_text(payload: CollectionResult) -> str:
+def _compact_text_snippet(text: str | None, max_chars: int | None) -> str | None:
+    if max_chars is None or not text:
+        return None
+    snippet = " ".join(text.split())
+    if not snippet:
+        return None
+    if len(snippet) > max_chars:
+        return f"{snippet[:max_chars]}..."
+    return snippet
+
+
+def _render_collect_text(payload: CollectionResult, max_text_chars: int | None = None) -> str:
     lines = [
         "Agent Reach Collection",
         "========================================",
@@ -854,6 +907,9 @@ def _render_collect_text(payload: CollectionResult) -> str:
             title = item.get("title") or item.get("id")
             url = item.get("url") or ""
             lines.append(f"  - {title} {url}".rstrip())
+            snippet = _compact_text_snippet(item.get("text"), max_text_chars)
+            if snippet:
+                lines.append(f"    {snippet}")
     else:
         error = payload["error"]
         code = error["code"] if error else "unknown"
@@ -863,12 +919,28 @@ def _render_collect_text(payload: CollectionResult) -> str:
 
 
 def _cmd_collect(args) -> int:
+    if args.max_text_chars is not None and args.max_text_chars < 1:
+        print("max-text-chars must be greater than or equal to 1", file=sys.stderr)
+        return 2
+
     client = AgentReachClient()
     payload = client.collect(args.channel, args.operation, args.input, limit=args.limit)
     if args.json:
         _print_json(payload)
     else:
-        print(_render_collect_text(payload))
+        print(_render_collect_text(payload, max_text_chars=args.max_text_chars))
+
+    if args.save:
+        try:
+            save_collection_result(
+                args.save,
+                payload,
+                run_id=args.run_id or default_run_id(),
+                input_value=args.input,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            print(f"Could not save evidence ledger: {exc}", file=sys.stderr)
+            return 1
 
     if payload["ok"]:
         return 0
@@ -876,6 +948,30 @@ def _cmd_collect(args) -> int:
     if error and error["code"] in {"unknown_channel", "unsupported_operation", "invalid_input"}:
         return 2
     return 1
+
+
+def _cmd_plan(args) -> int:
+    if args.plan_command == "candidates":
+        return _cmd_plan_candidates(args)
+    print("plan requires a subcommand", file=sys.stderr)
+    return 2
+
+
+def _cmd_plan_candidates(args) -> int:
+    if args.limit < 1:
+        print("limit must be greater than or equal to 1", file=sys.stderr)
+        return 2
+    try:
+        payload = build_candidates_payload(args.input, by=args.by, limit=args.limit)
+    except CandidatePlanError as exc:
+        print(f"Could not plan candidates: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        _print_json(payload)
+    else:
+        print(render_candidates_text(payload))
+    return 0
 
 
 def _render_channels_text(contracts: Sequence[dict]) -> str:

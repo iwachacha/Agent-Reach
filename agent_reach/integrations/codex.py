@@ -182,6 +182,9 @@ def _mcp_config_inline(repo_root: Path) -> dict[str, Any]:
 def _documentation_summary() -> list[str]:
     return [
         "Use `agent-reach collect --json` as the primary external interface in arbitrary projects.",
+        "Add `--save .agent-reach/evidence.jsonl` when a research run needs an auditable raw CollectionResult ledger.",
+        "Use `agent-reach plan candidates --input .agent-reach/evidence.jsonl --json` for no-model URL or ID dedupe before follow-up reads.",
+        "Treat `extras.source_hints` and web extraction hygiene metadata as diagnostics only, not ranking or trust scores.",
         "Use `agent-reach channels --json`, `doctor --json`, and `doctor --json --probe` for discovery and diagnostics.",
         "Tool installs expose the CLI. Import `AgentReachClient` only after installing Agent Reach into the caller Python environment.",
         "If `plugin_manifest` or `mcp_config` is null, write the inline payloads to the suggested destinations instead.",
@@ -224,6 +227,9 @@ def _external_project_usage() -> dict[str, Any]:
             "recommended_pattern": "subprocess collector",
             "notes": [
                 "Call `agent-reach collect --json` per source and map `items` into the bot's normalized item type.",
+                "Use `--save .agent-reach/evidence.jsonl` when the bot or CI job needs a raw evidence artifact.",
+                "Use `agent-reach plan candidates` when the bot or CI job wants a no-model dedupe pass before deeper reads.",
+                "Use source hints and web hygiene fields only as diagnostics; keep scoring and posting policy in the bot.",
                 "Treat Twitter/X as optional and gate it with `doctor --json --probe` when reliability matters.",
             ],
         },
@@ -244,15 +250,19 @@ def _codex_runtime_policy() -> dict[str, Any]:
             "For broad web discovery, use `exa_search` search, then read selected URLs with `web`.",
             "For known source types, prefer specialist channels: `github`, `qiita`, `bluesky`, `rss`, `youtube`, or `hatena_bookmark`.",
             "Use Twitter/X only when optional credentials and `doctor --json --probe` show the required operation is ready.",
+            "Treat `source_hints`, `text_length`, `link_count`, and `extraction_warning` as diagnostic metadata only.",
             "Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project.",
         ],
         "large_scale_research": {
             "pattern": "bounded fan-out with normalized JSON handoff",
             "steps": [
                 "Start with 2-4 broad discovery queries at small limits such as 5-10.",
-                "Dedupe URLs or item IDs in the downstream project before deeper reads.",
+                "Append raw collection envelopes with `--save .agent-reach/evidence.jsonl` when traceability matters.",
+                "Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json` for no-model dedupe.",
+                "Apply downstream ranking, summarization, and selection before deeper reads.",
                 "Fan out `web read` only for selected high-signal URLs.",
-                "Persist raw `CollectionResult` JSON as artifacts when running in CI.",
+                "Inspect web extraction warnings and source hints as non-authoritative diagnostics.",
+                "Persist raw `CollectionResult` JSONL ledgers as artifacts when running in CI.",
                 "Treat per-channel failures as partial results unless the user asked for strict completeness.",
             ],
             "recommended_limits": {

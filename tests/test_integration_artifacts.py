@@ -44,6 +44,37 @@ def test_setup_agent_reach_action_installs_from_repo_root():
     assert "install-twitter-cli" in action["inputs"]
 
 
+def test_agent_reach_smoke_workflow_collects_and_uploads_raw_artifacts():
+    workflow_path = _repo_root() / ".github" / "workflows" / "agent-reach-smoke.yml"
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+
+    assert "workflow_dispatch" in workflow["on"]
+    assert "uses: ./.github/actions/setup-agent-reach" in workflow_text
+    assert "agent-reach doctor --json" in workflow_text
+    assert "agent-reach collect --json --save" in workflow_text
+    assert "agent-reach plan candidates" in workflow_text
+    assert "actions/upload-artifact" in workflow_text
+    assert ".agent-reach/evidence.jsonl" in workflow_text
+    assert ".agent-reach/candidates.json" in workflow_text
+
+
+def test_downstream_examples_are_collect_only_patterns():
+    example_paths = [
+        _repo_root() / "examples" / "research-ledger.ps1",
+        _repo_root() / "examples" / "discord_news_collect.ps1",
+    ]
+
+    for path in example_paths:
+        text = path.read_text(encoding="utf-8")
+        assert "agent-reach collect --json --save" in text
+        assert "agent-reach plan candidates" in text
+        assert ".codex-plugin" not in text
+        assert ".mcp.json" not in text
+        assert "agent_reach" not in text
+        assert "Copy-Item" not in text
+
+
 def test_export_points_at_existing_checkout_artifacts():
     payload = export_codex_integration()
 

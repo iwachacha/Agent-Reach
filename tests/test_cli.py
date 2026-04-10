@@ -215,6 +215,318 @@ class TestCLI:
         payload = json.loads(capsys.readouterr().out)
         assert payload["meta"]["limit"] == 1
 
+    def test_collect_max_text_chars_adds_text_mode_snippet(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [
+                        {
+                            "id": "1",
+                            "title": "Example",
+                            "url": value,
+                            "text": "abcdefghijklmnopqrstuvwxyz",
+                        }
+                    ],
+                    "raw": None,
+                    "meta": {"count": 1, "limit": limit},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--max-text-chars",
+                    "5",
+                ]
+            )
+            == 0
+        )
+        output = capsys.readouterr().out
+        assert "Example https://example.com" in output
+        assert "abcde..." in output
+
+    def test_collect_max_text_chars_rejects_invalid_value(self, capsys, monkeypatch):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                raise AssertionError("collect should not run for invalid max-text-chars")
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--max-text-chars",
+                    "0",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "max-text-chars must be greater than or equal to 1" in captured.err
+
+    def test_collect_json_max_text_chars_preserves_full_text(self, capsys, monkeypatch):
+        full_text = "abcdefghijklmnopqrstuvwxyz"
+
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": "1", "title": "Example", "url": value, "text": full_text}],
+                    "raw": None,
+                    "meta": {"count": 1, "limit": limit},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--json",
+                    "--max-text-chars",
+                    "5",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["items"][0]["text"] == full_text
+
+    def test_collect_json_save_writes_ledger_and_preserves_stdout(self, capsys, monkeypatch, tmp_path):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": "1", "title": "Example", "url": value}],
+                    "raw": {"limit": limit},
+                    "meta": {"count": 1, "limit": limit},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+        ledger_path = tmp_path / ".agent-reach" / "evidence.jsonl"
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--json",
+                    "--save",
+                    str(ledger_path),
+                    "--run-id",
+                    "run-from-cli",
+                ]
+            )
+            == 0
+        )
+        stdout_payload = json.loads(capsys.readouterr().out)
+        ledger_record = json.loads(ledger_path.read_text(encoding="utf-8"))
+
+        assert stdout_payload["ok"] is True
+        assert stdout_payload["channel"] == "web"
+        assert ledger_record["run_id"] == "run-from-cli"
+        assert ledger_record["input"] == "https://example.com"
+        assert ledger_record["item_ids"] == ["1"]
+        assert ledger_record["urls"] == ["https://example.com"]
+        assert ledger_record["result"] == stdout_payload
+
+    def test_collect_save_records_error_envelope(self, capsys, monkeypatch, tmp_path):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": False,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [],
+                    "raw": None,
+                    "meta": {"input": value, "count": 0},
+                    "error": {
+                        "code": "unknown_channel",
+                        "message": "Unknown channel",
+                        "details": {},
+                    },
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+        ledger_path = tmp_path / "evidence.jsonl"
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "nope",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "value",
+                    "--save",
+                    str(ledger_path),
+                    "--run-id",
+                    "error-run",
+                ]
+            )
+            == 2
+        )
+        assert "unknown_channel" in capsys.readouterr().out
+        ledger_record = json.loads(ledger_path.read_text(encoding="utf-8"))
+        assert ledger_record["run_id"] == "error-run"
+        assert ledger_record["ok"] is False
+        assert ledger_record["error_code"] == "unknown_channel"
+        assert ledger_record["result"]["error"]["code"] == "unknown_channel"
+
+    def test_plan_candidates_json(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        result = {
+            "ok": True,
+            "channel": "web",
+            "operation": "read",
+            "items": [
+                {
+                    "id": "item-1",
+                    "kind": "page",
+                    "title": "Example",
+                    "url": "https://example.com/post/",
+                    "text": None,
+                    "author": None,
+                    "published_at": None,
+                    "source": "web",
+                    "extras": {},
+                }
+            ],
+            "raw": None,
+            "meta": {"input": "https://example.com/post/", "count": 1},
+            "error": None,
+        }
+        record = {
+            "record_type": "collection_result",
+            "run_id": "run-1",
+            "input": "https://example.com/post/",
+            "result": result,
+        }
+        ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+        assert (
+            main(
+                [
+                    "plan",
+                    "candidates",
+                    "--input",
+                    str(ledger_path),
+                    "--by",
+                    "url",
+                    "--limit",
+                    "10",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["command"] == "plan candidates"
+        assert payload["by"] == "url"
+        assert payload["limit"] == 10
+        assert payload["summary"]["candidate_count"] == 1
+        assert payload["candidates"][0]["title"] == "Example"
+        assert payload["candidates"][0]["extras"]["seen_in"][0]["run_id"] == "run-1"
+
+    def test_plan_candidates_text(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        result = {
+            "ok": True,
+            "channel": "web",
+            "operation": "read",
+            "items": [
+                {
+                    "id": "item-1",
+                    "kind": "page",
+                    "title": "Example",
+                    "url": "https://example.com",
+                    "text": None,
+                    "author": None,
+                    "published_at": None,
+                    "source": "web",
+                    "extras": {},
+                }
+            ],
+            "raw": None,
+            "meta": {"input": "https://example.com", "count": 1},
+            "error": None,
+        }
+        ledger_path.write_text(json.dumps(result) + "\n", encoding="utf-8")
+
+        assert main(["plan", "candidates", "--input", str(ledger_path)]) == 0
+        output = capsys.readouterr().out
+        assert "Agent Reach Candidate Plan" in output
+        assert "Candidates: 1/1" in output
+        assert "Example https://example.com" in output
+
+    def test_plan_candidates_missing_input_returns_exit_2(self, capsys, tmp_path):
+        missing_path = tmp_path / "missing.jsonl"
+
+        assert main(["plan", "candidates", "--input", str(missing_path), "--json"]) == 2
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "Could not plan candidates" in captured.err
+
+    def test_plan_candidates_invalid_limit_returns_exit_2(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        ledger_path.write_text("", encoding="utf-8")
+
+        assert (
+            main(
+                [
+                    "plan",
+                    "candidates",
+                    "--input",
+                    str(ledger_path),
+                    "--limit",
+                    "0",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "limit must be greater than or equal to 1" in captured.err
+
     def test_parser_does_not_expose_watch_command(self):
         parser = cli._build_parser()
         help_text = parser.format_help()

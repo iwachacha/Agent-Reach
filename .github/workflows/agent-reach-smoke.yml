@@ -1,0 +1,38 @@
+name: Agent Reach Smoke
+
+"on":
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Agent Reach
+        uses: ./.github/actions/setup-agent-reach
+
+      - name: Run smoke collection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .agent-reach
+          agent-reach doctor --json > .agent-reach/doctor.json
+          agent-reach collect --json --save .agent-reach/evidence.jsonl --run-id smoke-bluesky --channel bluesky --operation search --input "OpenAI" --limit 3 > .agent-reach/bluesky.json
+          agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 10 --json > .agent-reach/candidates.json
+
+      - name: Upload raw smoke artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-reach-smoke
+          path: |
+            .agent-reach/doctor.json
+            .agent-reach/evidence.jsonl
+            .agent-reach/bluesky.json
+            .agent-reach/candidates.json

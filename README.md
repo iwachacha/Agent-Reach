@@ -67,6 +67,15 @@ agent-reach collect --channel qiita --operation search --input "python user:Qiit
 agent-reach collect --channel twitter --operation user_posts --input "openai" --limit 10 --json
 ```
 
+Persist raw evidence for larger runs:
+
+```powershell
+agent-reach collect --channel exa_search --operation search --input "AI agent tooling" --limit 10 --json --save .agent-reach/evidence.jsonl --run-id 2026-04-10-agent-tooling
+agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json
+```
+
+Collection output may include diagnostic-only `extras.source_hints` on supported sources and `meta.text_length`, `meta.link_count`, and `meta.extraction_warning` for `web read`. These fields are conservative hints, not ranking, scoring, summarization, or publishing policy. `collect --max-text-chars N` only changes human text-mode snippets; JSON output and saved evidence stay full fidelity.
+
 Python SDK, when Agent Reach is installed into the caller Python environment:
 
 ```powershell
@@ -102,9 +111,11 @@ These are the supported machine-readable entry points for external projects. The
 
 External projects do not need to vendor this repo. For GitHub Actions, use `iwachacha/Agent-Reach/.github/actions/setup-agent-reach@main`; for local Codex, install the CLI and global skill once with `uv tool install --force git+https://github.com/iwachacha/Agent-Reach.git` and `agent-reach skill --install`.
 
-For larger research runs, use bounded fan-out: start with a few small `exa_search` queries, dedupe URLs or item IDs in the downstream project, then deep-read only selected URLs with `web`. Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project; Agent Reach should remain the collection layer.
+For larger research runs, use bounded fan-out: start with a few small `exa_search` queries, save raw `CollectionResult` envelopes with `--save .agent-reach/evidence.jsonl`, use `agent-reach plan candidates` for no-model URL or ID dedupe, then deep-read only selected URLs with `web`. Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project; Agent Reach should remain the collection layer.
 
 Agent Reach normalizes results into `items`, keeps the backend-native payload in `raw`, and never prompts interactively during collection.
+
+Reusable examples live under `examples/` and `.github/workflows/agent-reach-smoke.yml`. They collect raw JSON/JSONL and candidate artifacts for downstream automation; they do not own Discord posting, ranking, scheduling, or project state.
 
 ## Guides
 

@@ -28,7 +28,16 @@ agent-reach collect --channel bluesky --operation search --input "OpenAI" --limi
 agent-reach collect --channel qiita --operation search --input "python user:Qiita" --limit 5 --json
 ```
 
+When provenance matters, append each raw collection envelope to a JSONL ledger:
+
+```powershell
+agent-reach collect --channel exa_search --operation search --input "latest AI agent frameworks" --limit 5 --json --save .agent-reach/evidence.jsonl --run-id agent-frameworks
+agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json
+```
+
 This does not require `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files inside the downstream project.
+
+Treat `extras.source_hints` and web `meta` hygiene fields as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers.
 
 ## Codex Operating Policy
 
@@ -37,16 +46,19 @@ When Codex is working inside an arbitrary project:
 - Use the globally installed `agent-reach` CLI by default.
 - Do not copy Agent Reach repo files into the project unless the user explicitly asks for repo-local plugin artifacts.
 - Use `agent-reach collect --json` as the stable handoff to project code.
+- Add `--save .agent-reach/evidence.jsonl` when the run needs an auditable evidence trail.
+- Use `agent-reach plan candidates` for lightweight URL or ID dedupe before follow-up reads.
 - Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project.
 - Treat optional channel failures as partial results unless strict completeness is required.
 
 Large-scale research should use bounded fan-out:
 
 1. Start with 2-4 broad discovery queries at `--limit 5` to `--limit 10`.
-2. Dedupe URLs or item IDs in the downstream project.
-3. Use specialist channels when the source is known.
-4. Deep-read only selected URLs with `web`.
-5. Persist raw `CollectionResult` JSON as artifacts in CI when traceability matters.
+2. Save raw `CollectionResult` JSONL with `--save .agent-reach/evidence.jsonl`.
+3. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json`.
+4. Use specialist channels when the source is known.
+5. Deep-read only selected URLs with `web`.
+6. Persist raw ledgers and candidate plans as artifacts in CI when traceability matters.
 
 ## GitHub Actions
 
@@ -70,7 +82,8 @@ jobs:
         run: |
           agent-reach version
           agent-reach doctor --json
-          agent-reach collect --channel bluesky --operation search --input "OpenAI" --limit 3 --json > agent-reach-results.json
+          agent-reach collect --channel bluesky --operation search --input "OpenAI" --limit 3 --json --save .agent-reach/evidence.jsonl > agent-reach-results.json
+          agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json > agent-reach-candidates.json
 ```
 
 Enable optional backends only when the workflow needs them:
@@ -154,6 +167,8 @@ Map `payload["items"]` to the bot's normalized item type:
 - `text` -> summary candidate or body snippet
 - `author` -> source author
 - `published_at` -> item timestamp
-- `extras.metrics` / channel-specific extras -> engagement, media, labels, or ranking metadata
+- `extras.metrics` / channel-specific extras -> engagement, media, labels, source hints, or diagnostics
 
 Use `agent-reach doctor --json --probe` in CI or scheduled workflows when readiness matters. Treat Twitter/X as optional: `doctor --json` reports authentication state, while `doctor --json --probe` separates live `user` and `search` readiness under `operation_statuses`.
+
+The repository examples `examples/research-ledger.ps1` and `examples/discord_news_collect.ps1` show collect-only ledger and candidate planning flows. They intentionally stop at raw artifacts so the downstream project keeps ownership of ranking, summarization, posting, and state.

@@ -14,10 +14,15 @@ from agent_reach.results import (
     derive_title_from_text,
     parse_timestamp,
 )
+from agent_reach.source_hints import web_source_hints
 
 from .base import BaseAdapter
 
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+_MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)")
+_BARE_URL_RE = re.compile(r"(?<!\()https?://[^\s)]+")
+_NAV_HEAVY_LINK_THRESHOLD = 25
+_NAV_HEAVY_MAX_CHARS_PER_LINK = 120
 
 
 def _import_requests():
@@ -60,6 +65,28 @@ def _title_from_markdown(url: str, markdown: str, fallback_title: str | None = N
     return derive_title_from_text(markdown, fallback=parsed.netloc or url)
 
 
+def _link_count(markdown: str) -> int:
+    return len(_MARKDOWN_LINK_RE.findall(markdown)) + len(_BARE_URL_RE.findall(markdown))
+
+
+def _extraction_warning(text_length: int, link_count: int) -> str | None:
+    if link_count < _NAV_HEAVY_LINK_THRESHOLD:
+        return None
+    if text_length <= link_count * _NAV_HEAVY_MAX_CHARS_PER_LINK:
+        return "navigation_heavy"
+    return None
+
+
+def _web_hygiene_meta(text: str) -> dict[str, int | str | None]:
+    link_count = _link_count(text)
+    text_length = len(text)
+    return {
+        "text_length": text_length,
+        "link_count": link_count,
+        "extraction_warning": _extraction_warning(text_length, link_count),
+    }
+
+
 class WebAdapter(BaseAdapter):
     """Read generic web pages through Jina Reader."""
 
@@ -87,6 +114,7 @@ class WebAdapter(BaseAdapter):
 
         markdown = response.text
         title, published_at, body = _extract_reader_metadata(markdown)
+        hygiene_meta = _web_hygiene_meta(body)
         item = build_item(
             item_id=normalized,
             kind="page",
@@ -96,11 +124,14 @@ class WebAdapter(BaseAdapter):
             author=None,
             published_at=published_at,
             source=self.channel,
-            extras={"reader_url": f"https://r.jina.ai/{normalized}"},
+            extras={
+                "reader_url": f"https://r.jina.ai/{normalized}",
+                "source_hints": web_source_hints(published_at),
+            },
         )
         return self.ok_result(
             "read",
             items=[item],
             raw=markdown,
-            meta=self.make_meta(value=normalized, limit=limit, started_at=started_at),
+            meta=self.make_meta(value=normalized, limit=limit, started_at=started_at, **hygiene_meta),
         )

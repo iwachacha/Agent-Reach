@@ -57,6 +57,40 @@ def test_web_adapter_success(config, monkeypatch):
     assert payload["items"][0]["title"] == "Example Domain"
     assert payload["items"][0]["published_at"] == "2026-04-10T00:00:00Z"
     assert "This is a test page." in payload["items"][0]["text"]
+    assert payload["meta"]["text_length"] == len("# Example Domain\n\nThis is a test page.")
+    assert payload["meta"]["link_count"] == 0
+    assert payload["meta"]["extraction_warning"] is None
+    assert payload["items"][0]["extras"]["source_hints"] == {
+        "source_kind": "unknown",
+        "authority_hint": "unknown",
+        "freshness_hint": "timestamped",
+        "volatility_hint": "unknown",
+    }
+
+
+def test_web_adapter_navigation_heavy_warning(config, monkeypatch):
+    links = "\n".join(f"- [Link {idx}](https://example.com/{idx})" for idx in range(30))
+
+    class FakeResponse:
+        text = f"Title: Navigation\n\nMarkdown Content:\n{links}\n"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, headers=None, timeout=None):
+            return FakeResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.web._import_requests", lambda: FakeRequests)
+
+    payload = WebAdapter(config=config).read("example.com")
+
+    assert payload["ok"] is True
+    assert payload["meta"]["link_count"] >= 30
+    assert payload["meta"]["extraction_warning"] == "navigation_heavy"
 
 
 def test_web_adapter_http_error(config, monkeypatch):
@@ -281,6 +315,12 @@ def test_bluesky_adapter_success(config, monkeypatch):
     assert payload["meta"]["attempted_host_results"][1]["reason"] == "ok"
     assert payload["items"][0]["extras"]["media"][0]["type"] == "image"
     assert payload["items"][0]["extras"]["media"][0]["aspect_ratio"] == {"width": 4, "height": 3}
+    assert payload["items"][0]["extras"]["source_hints"] == {
+        "source_kind": "social_post",
+        "authority_hint": "social",
+        "freshness_hint": "timestamped",
+        "volatility_hint": "high",
+    }
 
 
 def test_bluesky_adapter_normalizes_nested_video_embed(config, monkeypatch):
@@ -408,6 +448,12 @@ def test_github_adapter_read_success(config, monkeypatch):
     assert payload["ok"] is True
     assert payload["items"][0]["id"] == "openai/openai-python"
     assert payload["items"][0]["extras"]["default_branch"] == "main"
+    assert payload["items"][0]["extras"]["source_hints"] == {
+        "source_kind": "repository",
+        "authority_hint": "project_owner",
+        "freshness_hint": "timestamped",
+        "volatility_hint": "medium",
+    }
 
 
 def test_github_adapter_invalid_json(config, monkeypatch):
@@ -492,6 +538,12 @@ def test_rss_adapter_success(config, monkeypatch):
     assert payload["ok"] is True
     assert payload["meta"]["feed_title"] == "Example Feed"
     assert payload["items"][0]["author"] == "Alice"
+    assert payload["items"][0]["extras"]["source_hints"] == {
+        "source_kind": "feed_item",
+        "authority_hint": "unknown",
+        "freshness_hint": "timestamped",
+        "volatility_hint": "medium",
+    }
 
 
 def test_rss_adapter_parse_failure(config, monkeypatch):

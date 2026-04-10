@@ -8,6 +8,7 @@ import time
 from urllib.parse import urlparse
 
 from agent_reach.results import CollectionResult, NormalizedItem, build_item, parse_timestamp
+from agent_reach.source_hints import github_source_hints
 
 from .base import BaseAdapter
 
@@ -85,23 +86,29 @@ class GitHubAdapter(BaseAdapter):
                 raw=raw_output,
                 meta=self.make_meta(value=query, limit=limit, started_at=started_at),
             )
-        items: list[NormalizedItem] = [
-            build_item(
-                item_id=repo.get("fullName") or repo.get("url") or repo.get("name") or f"github-{idx}",
-                kind="repository",
-                title=repo.get("fullName") or repo.get("name"),
-                url=repo.get("url"),
-                text=repo.get("description"),
-                author=(repo.get("owner") or {}).get("login"),
-                published_at=parse_timestamp(repo.get("updatedAt")),
-                source=self.channel,
-                extras={
-                    "stars": repo.get("stargazersCount"),
-                    "language": repo.get("language"),
-                },
+        items: list[NormalizedItem] = []
+        for idx, repo in enumerate(raw):
+            published_at = parse_timestamp(repo.get("updatedAt"))
+            items.append(
+                build_item(
+                    item_id=repo.get("fullName")
+                    or repo.get("url")
+                    or repo.get("name")
+                    or f"github-{idx}",
+                    kind="repository",
+                    title=repo.get("fullName") or repo.get("name"),
+                    url=repo.get("url"),
+                    text=repo.get("description"),
+                    author=(repo.get("owner") or {}).get("login"),
+                    published_at=published_at,
+                    source=self.channel,
+                    extras={
+                        "stars": repo.get("stargazersCount"),
+                        "language": repo.get("language"),
+                        "source_hints": github_source_hints(published_at),
+                    },
+                )
             )
-            for idx, repo in enumerate(raw)
-        ]
         return self.ok_result(
             "search",
             items=items,
@@ -170,6 +177,7 @@ class GitHubAdapter(BaseAdapter):
                 raw=raw_output,
                 meta=self.make_meta(value=repo_name, limit=limit, started_at=started_at),
             )
+        published_at = parse_timestamp(raw.get("updatedAt"))
         item = build_item(
             item_id=raw.get("nameWithOwner") or repo_name,
             kind="repository",
@@ -177,7 +185,7 @@ class GitHubAdapter(BaseAdapter):
             url=raw.get("url"),
             text=raw.get("description"),
             author=(raw.get("owner") or {}).get("login"),
-            published_at=parse_timestamp(raw.get("updatedAt")),
+            published_at=published_at,
             source=self.channel,
             extras={
                 "homepage_url": raw.get("homepageUrl"),
@@ -190,6 +198,7 @@ class GitHubAdapter(BaseAdapter):
                 "is_archived": raw.get("isArchived"),
                 "default_branch": (raw.get("defaultBranchRef") or {}).get("name"),
                 "topics": [topic.get("name") for topic in raw.get("repositoryTopics") or [] if topic.get("name")],
+                "source_hints": github_source_hints(published_at),
             },
         )
         return self.ok_result(

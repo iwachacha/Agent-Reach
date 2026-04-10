@@ -15,6 +15,7 @@ from agent_reach.results import (
     derive_title_from_text,
     parse_timestamp,
 )
+from agent_reach.source_hints import bluesky_source_hints
 
 from .base import BaseAdapter
 
@@ -212,6 +213,7 @@ class BlueskyAdapter(BaseAdapter):
                     record.get("text"),
                     fallback=external.get("title") or f"Bluesky post {idx + 1}",
                 )
+                published_at = parse_timestamp(record.get("createdAt") or post.get("indexedAt"))
                 items.append(
                     build_item(
                         item_id=post.get("uri") or post.get("cid") or f"bluesky-{idx}",
@@ -220,7 +222,7 @@ class BlueskyAdapter(BaseAdapter):
                         url=_post_url(post),
                         text=record.get("text"),
                         author=author.get("handle"),
-                        published_at=parse_timestamp(record.get("createdAt") or post.get("indexedAt")),
+                        published_at=published_at,
                         source=self.channel,
                         extras={
                             "author_display_name": author.get("displayName"),
@@ -233,6 +235,7 @@ class BlueskyAdapter(BaseAdapter):
                             "media": _media_from_embed(embed),
                             "external_uri": external.get("uri"),
                             "external_title": external.get("title"),
+                            "source_hints": bluesky_source_hints(published_at),
                         },
                     )
                 )
