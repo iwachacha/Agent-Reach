@@ -33,13 +33,16 @@ class TestConfig:
 
     def test_get_uses_known_env_aliases(self, tmp_config, monkeypatch):
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("QIITA_TOKEN", raising=False)
         monkeypatch.delenv("TWITTER_AUTH_TOKEN", raising=False)
         monkeypatch.delenv("TWITTER_CT0", raising=False)
         monkeypatch.setenv("GH_TOKEN", "gh-token")
+        monkeypatch.setenv("QIITA_TOKEN", "qiita-token")
         monkeypatch.setenv("AUTH_TOKEN", "auth-token")
         monkeypatch.setenv("CT0", "ct0-token")
 
         assert tmp_config.get("github_token") == "gh-token"
+        assert tmp_config.get("qiita_token") == "qiita-token"
         assert tmp_config.get("twitter_auth_token") == "auth-token"
         assert tmp_config.get("twitter_ct0") == "ct0-token"
 

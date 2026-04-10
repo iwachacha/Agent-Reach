@@ -8,8 +8,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from agent_reach.adapters.base import BaseAdapter
+from agent_reach.adapters.bluesky import BlueskyAdapter
 from agent_reach.adapters.exa_search import ExaSearchAdapter
 from agent_reach.adapters.github import GitHubAdapter
+from agent_reach.adapters.hatena_bookmark import HatenaBookmarkAdapter
+from agent_reach.adapters.qiita import QiitaAdapter
 from agent_reach.adapters.rss import RSSAdapter
 from agent_reach.adapters.twitter import TwitterAdapter
 from agent_reach.adapters.web import WebAdapter
@@ -129,6 +133,181 @@ def test_exa_adapter_reports_invalid_response_when_normalization_fails(config, m
 
     assert payload["ok"] is False
     assert payload["error"]["code"] == "invalid_response"
+
+
+def test_hatena_bookmark_adapter_success(config, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = '{"ok":true}'
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+        @staticmethod
+        def json():
+            return {
+                "eid": "123",
+                "title": "Example Domain",
+                "url": "https://example.com/",
+                "entry_url": "https://b.hatena.ne.jp/entry/s/example.com/",
+                "count": 12,
+                "screenshot": "https://example.com/image.png",
+                "bookmarks": [
+                    {"user": "alice", "comment": "useful", "timestamp": "2026/04/10 10:00", "tags": []}
+                ],
+                "related": [
+                    {
+                        "eid": "related-1",
+                        "title": "Related Entry",
+                        "url": "https://example.com/related",
+                        "entry_url": "https://b.hatena.ne.jp/entry/s/example.com/related",
+                        "count": 5,
+                    }
+                ],
+            }
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            return FakeResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.hatena_bookmark._import_requests", lambda: FakeRequests)
+
+    payload = HatenaBookmarkAdapter(config=config).read("https://example.com", limit=2)
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["extras"]["bookmark_count"] == 12
+    assert payload["items"][1]["kind"] == "related_page"
+
+
+def test_hatena_bookmark_adapter_handles_missing_entry(config, monkeypatch):
+    class EmptyResponse:
+        status_code = 200
+        text = "null"
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+        @staticmethod
+        def json():
+            return None
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            return EmptyResponse()
+
+    adapter = HatenaBookmarkAdapter(config=config)
+    monkeypatch.setattr("agent_reach.adapters.hatena_bookmark._import_requests", lambda: FakeRequests)
+    monkeypatch.setattr(adapter, "_bookmark_count", lambda _url: 0)
+
+    payload = adapter.read("https://example.com")
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["extras"]["bookmark_count"] == 0
+
+
+def test_bluesky_adapter_success(config, monkeypatch):
+    class PublicApi403Response:
+        status_code = 403
+        text = "forbidden"
+
+        @staticmethod
+        def json():
+            raise ValueError("not json")
+
+    class ApiResponse:
+        status_code = 200
+        text = '{"posts":[]}'
+
+        @staticmethod
+        def json():
+            return {
+                "posts": [
+                    {
+                        "uri": "at://did:plc:abc/app.bsky.feed.post/3abc",
+                        "cid": "cid-1",
+                        "author": {"handle": "openai.com", "displayName": "OpenAI"},
+                        "record": {
+                            "text": "OpenAI shipped a thing",
+                            "createdAt": "2026-04-10T00:00:00Z",
+                        },
+                        "likeCount": 10,
+                        "replyCount": 2,
+                        "repostCount": 3,
+                        "quoteCount": 1,
+                        "bookmarkCount": 4,
+                        "indexedAt": "2026-04-10T00:00:01Z",
+                        "labels": [],
+                    }
+                ]
+            }
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(url, headers=None, timeout=None):
+            if "public.api.bsky.app" in url:
+                return PublicApi403Response()
+            return ApiResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.bluesky._import_requests", lambda: FakeRequests)
+
+    payload = BlueskyAdapter(config=config).search("OpenAI", limit=1)
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["author"] == "openai.com"
+    assert payload["meta"]["api_base_url"] == "https://api.bsky.app"
+
+
+def test_qiita_adapter_success(config, monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = "[]"
+        headers = {"Total-Count": "42"}
+
+        @staticmethod
+        def json():
+            return [
+                {
+                    "id": "abc123",
+                    "title": "Qiita article",
+                    "url": "https://qiita.com/Qiita/items/abc123",
+                    "body": "markdown body",
+                    "created_at": "2026-04-10T00:00:00+09:00",
+                    "updated_at": "2026-04-10T01:00:00+09:00",
+                    "likes_count": 10,
+                    "stocks_count": 20,
+                    "comments_count": 3,
+                    "reactions_count": 4,
+                    "page_views_count": 50,
+                    "private": False,
+                    "tags": [{"name": "Python"}],
+                    "user": {"id": "Qiita"},
+                }
+            ]
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, params=None, headers=None, timeout=None):
+            return FakeResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.qiita._import_requests", lambda: FakeRequests)
+
+    payload = QiitaAdapter(config=config).search("python", limit=1)
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["author"] == "Qiita"
+    assert payload["meta"]["total_count"] == "42"
 
 
 def test_github_adapter_read_success(config, monkeypatch):
@@ -267,10 +446,11 @@ def test_rss_adapter_parse_failure(config, monkeypatch):
 def test_twitter_adapter_success(config, monkeypatch):
     adapter = TwitterAdapter(config=config)
     monkeypatch.setattr(adapter, "command_path", lambda _name: "twitter")
-    monkeypatch.setattr(
-        adapter,
-        "run_command",
-        lambda command, timeout=120, env=None: _cp(
+    captured = {}
+
+    def fake_run(command, timeout=120, env=None):
+        captured["command"] = command
+        return _cp(
             stdout=json.dumps(
                 {
                     "ok": True,
@@ -285,13 +465,150 @@ def test_twitter_adapter_success(config, monkeypatch):
                     ],
                 }
             )
-        ),
+        )
+
+    monkeypatch.setattr(
+        adapter,
+        "run_command",
+        fake_run,
     )
 
     payload = adapter.search("OpenAI", limit=1)
 
     assert payload["ok"] is True
     assert payload["items"][0]["author"] == "OpenAI"
+    assert payload["items"][0]["url"] == "https://x.com/OpenAI/status/123"
+    assert payload["items"][0]["extras"]["metrics"] == {"likes": 10}
+    assert captured["command"][1:3] == ["search", "OpenAI"]
+
+
+def test_twitter_adapter_search_translates_common_advanced_tokens(config, monkeypatch):
+    adapter = TwitterAdapter(config=config)
+    monkeypatch.setattr(adapter, "command_path", lambda _name: "twitter")
+    captured = {}
+
+    def fake_run(command, timeout=120, env=None):
+        captured["command"] = command
+        return _cp(stdout=json.dumps({"ok": True, "data": []}))
+
+    monkeypatch.setattr(adapter, "run_command", fake_run)
+
+    payload = adapter.search("from:OpenAI has:media type:photos lang:ja", limit=5)
+
+    assert payload["ok"] is True
+    assert captured["command"] == [
+        "twitter",
+        "search",
+        "--from",
+        "OpenAI",
+        "--has",
+        "media",
+        "--type",
+        "photos",
+        "--lang",
+        "ja",
+        "-n",
+        "5",
+        "--json",
+    ]
+
+
+def test_twitter_adapter_user_success(config, monkeypatch):
+    adapter = TwitterAdapter(config=config)
+    monkeypatch.setattr(adapter, "command_path", lambda _name: "twitter")
+    monkeypatch.setattr(
+        adapter,
+        "run_command",
+        lambda command, timeout=120, env=None: _cp(
+            stdout=json.dumps(
+                {
+                    "ok": True,
+                    "data": {
+                        "id": "4398626122",
+                        "name": "OpenAI",
+                        "screenName": "OpenAI",
+                        "bio": "Research lab",
+                        "followers": 100,
+                        "following": 4,
+                        "tweets": 10,
+                        "likes": 5,
+                        "verified": True,
+                        "url": "https://openai.com",
+                        "createdAtISO": "2015-12-06T22:51:08+00:00",
+                    },
+                }
+            )
+        ),
+    )
+
+    payload = adapter.user("@OpenAI")
+
+    assert payload["ok"] is True
+    assert payload["items"][0]["kind"] == "profile"
+    assert payload["items"][0]["url"] == "https://x.com/OpenAI"
+    assert payload["items"][0]["extras"]["followers"] == 100
+
+
+def test_twitter_adapter_user_posts_success(config, monkeypatch):
+    adapter = TwitterAdapter(config=config)
+    monkeypatch.setattr(adapter, "command_path", lambda _name: "twitter")
+    monkeypatch.setattr(
+        adapter,
+        "run_command",
+        lambda command, timeout=120, env=None: _cp(
+            stdout=json.dumps(
+                {
+                    "ok": True,
+                    "data": [
+                        {
+                            "id": "123",
+                            "text": "OpenAI shipped a thing",
+                            "author": {"screenName": "OpenAI", "name": "OpenAI"},
+                            "createdAtISO": "2026-04-10T00:00:00Z",
+                            "media": [{"type": "photo", "url": "https://pbs.twimg.com/media/a.png"}],
+                        }
+                    ],
+                }
+            )
+        ),
+    )
+
+    payload = adapter.user_posts("https://x.com/OpenAI", limit=1)
+
+    assert payload["ok"] is True
+    assert payload["operation"] == "user_posts"
+    assert payload["items"][0]["extras"]["media"][0]["type"] == "photo"
+
+
+def test_twitter_adapter_tweet_success(config, monkeypatch):
+    adapter = TwitterAdapter(config=config)
+    monkeypatch.setattr(adapter, "command_path", lambda _name: "twitter")
+    captured = {}
+
+    def fake_run(command, timeout=120, env=None):
+        captured["command"] = command
+        return _cp(
+            stdout=json.dumps(
+                {
+                    "ok": True,
+                    "data": [
+                        {
+                            "id": "123",
+                            "text": "OpenAI shipped a thing",
+                            "author": {"screenName": "OpenAI", "name": "OpenAI"},
+                            "createdAtISO": "2026-04-10T00:00:00Z",
+                        }
+                    ],
+                }
+            )
+        )
+
+    monkeypatch.setattr(adapter, "run_command", fake_run)
+
+    payload = adapter.tweet("https://x.com/OpenAI/status/123", limit=1)
+
+    assert payload["ok"] is True
+    assert captured["command"][2] == "123"
     assert payload["items"][0]["url"] == "https://x.com/OpenAI/status/123"
 
 
@@ -311,3 +628,15 @@ def test_twitter_adapter_not_authenticated(config, monkeypatch):
 
     assert payload["ok"] is False
     assert payload["error"]["code"] == "not_authenticated"
+
+
+def test_base_adapter_runtime_env_is_noninteractive_and_utf8(config, monkeypatch):
+    monkeypatch.delenv("PYTHONIOENCODING", raising=False)
+    monkeypatch.delenv("PYTHONUTF8", raising=False)
+    config.set("qiita_token", "qiita-token")
+
+    env = BaseAdapter(config=config).runtime_env()
+
+    assert env["PYTHONIOENCODING"] == "utf-8"
+    assert env["PYTHONUTF8"] == "1"
+    assert env["QIITA_TOKEN"] == "qiita-token"

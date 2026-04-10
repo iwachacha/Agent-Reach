@@ -1,6 +1,6 @@
 ---
 name: agent-reach
-description: Windows-first research integration tooling for Codex. Use when the user needs to inspect available research channels, verify readiness, export Codex integration settings, or run thin read-only collection over web, Exa, GitHub, YouTube, RSS, or optional Twitter/X.
+description: Windows-first research integration tooling for Codex. Use when the user needs to inspect available research channels, verify readiness, export Codex integration settings, or run thin read-only collection over web, Exa, GitHub, Hatena Bookmark, Bluesky, Qiita, YouTube, RSS, or optional Twitter/X.
 ---
 
 # Agent Reach
@@ -36,6 +36,9 @@ agent-reach export-integration --client codex --format json
 - `web`: generic page reading through Jina Reader
 - `exa_search`: wide web search through `mcporter`
 - `github`: repository and code search through `gh`
+- `hatena_bookmark`: URL-centric Hatena Bookmark reactions and related entries
+- `bluesky`: public Bluesky post search
+- `qiita`: public Qiita article search
 - `youtube`: metadata and subtitle extraction through `yt-dlp`
 - `rss`: RSS and Atom feeds through `feedparser`
 - `twitter`: optional Twitter/X search through `twitter-cli`
@@ -46,8 +49,10 @@ agent-reach export-integration --client codex --format json
 2. Run `agent-reach doctor --json` when readiness matters.
 3. Use `--probe` only when a lightweight live check is useful.
 4. Use `agent-reach collect --json` or `AgentReachClient` when external code needs normalized results.
-5. Prefer `exa_search` plus `web` for note, Qiita, Zenn, blogs, and docs sites.
-6. Treat Twitter/X as opt-in and expect cookie-based auth.
+5. Use `qiita` for direct Qiita article search. Use `hatena_bookmark` when the input is a URL and you want Hatena reactions or related entries.
+6. Use `bluesky` for public Bluesky post search.
+7. Prefer `exa_search` plus `web` for note, Zenn, blogs, docs sites, and other general web discovery.
+8. Treat Twitter/X as opt-in and expect cookie-based auth.
 
 ## Command Routing
 

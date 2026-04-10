@@ -22,6 +22,6 @@ Agent Reach is a Windows-first integration layer for research tooling on Codex-s
 
 ## Current scope
 
-- Supported channels: `web`, `exa_search`, `github`, `youtube`, `rss`, optional `twitter`
+- Supported channels: `web`, `exa_search`, `github`, `hatena_bookmark`, `bluesky`, `qiita`, `youtube`, `rss`, optional `twitter`
 - Purpose: bootstrapper, channel registry, readiness diagnostics, thin read-only collection helper
 - Non-goal in this phase: full workflow orchestration such as scheduling, ranking, summarization, or publishing

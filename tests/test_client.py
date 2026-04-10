@@ -47,6 +47,7 @@ def test_agent_reach_alias_and_namespace_access(tmp_path, monkeypatch):
     legacy = AgentReach(config=config)
 
     assert client.exa_search is client.exa
+    assert client.hatena is client.hatena_bookmark
     assert isinstance(legacy, AgentReachClient)
     assert client.github.read("openai/openai-python")["ok"] is True
 

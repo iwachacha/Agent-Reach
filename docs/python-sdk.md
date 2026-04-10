@@ -24,6 +24,10 @@ client = AgentReachClient()
 github_repo = client.github.read("openai/openai-python")
 web_page = client.web.read("https://example.com")
 search_results = client.exa.search("latest gpt-5.4 release notes", limit=3)
+qiita_results = client.qiita.search("python user:Qiita", limit=3)
+bluesky_results = client.bluesky.search("OpenAI", limit=3)
+hatena_reactions = client.hatena_bookmark.read("https://example.com", limit=5)
+twitter_posts = client.twitter.user_posts("openai", limit=5)
 ```
 
 ## Result shape
@@ -63,6 +67,8 @@ def collect_digest():
     results = []
     results.append(client.exa.search("OpenAI pricing", limit=3))
     results.append(client.github.read("openai/openai-python"))
+    results.append(client.qiita.search("python user:Qiita", limit=3))
+    results.append(client.bluesky.search("OpenAI", limit=3))
     results.append(client.rss.read("https://hnrss.org/frontpage", limit=3))
 
     messages = []

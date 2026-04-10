@@ -14,16 +14,19 @@ from .base import Channel
 
 class TwitterChannel(Channel):
     name = "twitter"
-    description = "Twitter/X search and timeline access"
+    description = "Twitter/X search, profiles, posts, and tweet threads"
     backends = ["twitter-cli"]
     tier = 1
     auth_kind = "cookie"
     entrypoint_kind = "cli"
-    operations = ["search"]
+    operations = ["search", "user", "user_posts", "tweet"]
     required_commands = ["twitter"]
     host_patterns = ["https://x.com/*", "https://twitter.com/*"]
     example_invocations = [
         'agent-reach collect --channel twitter --operation search --input "gpt-5.4" --limit 10 --json',
+        'agent-reach collect --channel twitter --operation user --input "openai" --json',
+        'agent-reach collect --channel twitter --operation user_posts --input "openai" --limit 20 --json',
+        'agent-reach collect --channel twitter --operation tweet --input "https://x.com/OpenAI/status/2042296046009626989" --limit 20 --json',
         'twitter status',
     ]
     supports_probe = True
@@ -57,7 +60,7 @@ class TwitterChannel(Channel):
 
         output = f"{result.stdout}\n{result.stderr}".lower()
         if result.returncode == 0 and "ok: true" in output:
-            return "ok", "Ready for tweet reads, search, and timeline lookups"
+            return "ok", "Ready for search, profile lookup, user posts, and tweet threads"
         if "not_authenticated" in output:
             return "warn", (
                 "twitter-cli is installed but not authenticated. "
@@ -71,6 +74,8 @@ class TwitterChannel(Channel):
 
 def _twitter_runtime_env(config=None) -> dict[str, str]:
     env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
     auth_token = env.get("TWITTER_AUTH_TOKEN") or env.get("AUTH_TOKEN")
     ct0 = env.get("TWITTER_CT0") or env.get("CT0")
 

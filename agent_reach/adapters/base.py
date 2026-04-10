@@ -92,10 +92,16 @@ class BaseAdapter:
         """Return the non-interactive runtime environment for backend commands."""
 
         env = os.environ.copy()
+        env.setdefault("PYTHONIOENCODING", "utf-8")
+        env.setdefault("PYTHONUTF8", "1")
         github_token = env.get("GITHUB_TOKEN") or env.get("GH_TOKEN") or self.config.get("github_token")
         if github_token:
             env["GITHUB_TOKEN"] = str(github_token)
             env["GH_TOKEN"] = str(github_token)
+
+        qiita_token = env.get("QIITA_TOKEN") or self.config.get("qiita_token")
+        if qiita_token:
+            env["QIITA_TOKEN"] = str(qiita_token)
 
         twitter_auth = env.get("TWITTER_AUTH_TOKEN") or env.get("AUTH_TOKEN") or self.config.get("twitter_auth_token")
         twitter_ct0 = env.get("TWITTER_CT0") or env.get("CT0") or self.config.get("twitter_ct0")

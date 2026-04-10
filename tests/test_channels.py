@@ -4,14 +4,27 @@
 import urllib.request
 
 from agent_reach.channels import get_all_channels, get_channel
+from agent_reach.channels.bluesky import BlueskyChannel
 from agent_reach.channels.exa_search import ExaSearchChannel
 from agent_reach.channels.github import GitHubChannel
+from agent_reach.channels.hatena_bookmark import HatenaBookmarkChannel
+from agent_reach.channels.qiita import QiitaChannel
 from agent_reach.channels.web import WebChannel
 
 
 def test_registry_contains_only_supported_channels():
     names = [channel.name for channel in get_all_channels()]
-    assert names == ["web", "exa_search", "github", "youtube", "rss", "twitter"]
+    assert names == [
+        "web",
+        "exa_search",
+        "github",
+        "hatena_bookmark",
+        "bluesky",
+        "qiita",
+        "youtube",
+        "rss",
+        "twitter",
+    ]
 
 
 def test_get_channel_by_name():
@@ -99,3 +112,18 @@ def test_exa_search_uses_user_scoped_mcporter_config(monkeypatch, tmp_path):
         str(tmp_path / ".mcporter" / "mcporter.json"),
         "config",
     ]
+
+
+def test_hatena_bookmark_can_handle_any_http_url():
+    channel = HatenaBookmarkChannel()
+    assert channel.can_handle("https://example.com")
+
+
+def test_bluesky_can_handle_bsky_urls():
+    channel = BlueskyChannel()
+    assert channel.can_handle("https://bsky.app/profile/openai.com/post/3abc")
+
+
+def test_qiita_can_handle_qiita_urls():
+    channel = QiitaChannel()
+    assert channel.can_handle("https://qiita.com/Qiita/items/example")

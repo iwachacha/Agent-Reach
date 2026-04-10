@@ -17,6 +17,7 @@ class Config:
     CONFIG_FILE = CONFIG_DIR / "config.yaml"
     ENV_ALIASES = {
         "github_token": ("GITHUB_TOKEN", "GH_TOKEN"),
+        "qiita_token": ("QIITA_TOKEN",),
         "twitter_auth_token": ("TWITTER_AUTH_TOKEN", "AUTH_TOKEN"),
         "twitter_ct0": ("TWITTER_CT0", "CT0"),
     }

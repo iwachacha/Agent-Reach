@@ -14,6 +14,9 @@ Agent Reach is intentionally narrow. It is designed to help other tools collect 
 - `web` via Jina Reader
 - `exa_search` via Exa MCP and `mcporter`
 - `github` via `gh`
+- `hatena_bookmark` via Hatena Bookmark public APIs
+- `bluesky` via the Bluesky AppView API
+- `qiita` via Qiita API v2
 - `youtube` via `yt-dlp`
 - `rss` via `feedparser`
 - optional `twitter` via `twitter-cli`
@@ -49,6 +52,7 @@ from agent_reach import AgentReachClient
 client = AgentReachClient()
 result = client.github.read("openai/openai-python")
 print(result["items"][0]["title"])
+print(client.qiita.search("python user:Qiita", limit=3)["items"][0]["url"])
 ```
 
 CLI JSON:
@@ -56,6 +60,10 @@ CLI JSON:
 ```powershell
 agent-reach collect --channel github --operation read --input "openai/openai-python" --json
 agent-reach collect --channel exa_search --operation search --input "latest gpt-5.4 release notes" --limit 3 --json
+agent-reach collect --channel bluesky --operation search --input "OpenAI" --limit 3 --json
+agent-reach collect --channel hatena_bookmark --operation read --input "https://example.com" --limit 5 --json
+agent-reach collect --channel qiita --operation search --input "python user:Qiita" --limit 3 --json
+agent-reach collect --channel twitter --operation user_posts --input "openai" --limit 10 --json
 ```
 
 Discovery and diagnostics:

@@ -6,8 +6,11 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from .base import Channel
+from .bluesky import BlueskyChannel
 from .exa_search import ExaSearchChannel
 from .github import GitHubChannel
+from .hatena_bookmark import HatenaBookmarkChannel
+from .qiita import QiitaChannel
 from .rss import RSSChannel
 from .twitter import TwitterChannel
 from .web import WebChannel
@@ -17,6 +20,9 @@ ALL_CHANNELS: List[Channel] = [
     WebChannel(),
     ExaSearchChannel(),
     GitHubChannel(),
+    HatenaBookmarkChannel(),
+    BlueskyChannel(),
+    QiitaChannel(),
     YouTubeChannel(),
     RSSChannel(),
     TwitterChannel(),

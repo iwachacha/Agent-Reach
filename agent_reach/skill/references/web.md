@@ -12,4 +12,4 @@ Use RSS feeds when the source exposes one:
 agent-reach collect --channel rss --operation read --input "https://example.com/feed.xml" --limit 3 --json
 ```
 
-Prefer `web` over bespoke scraping for documentation, release notes, blog posts, note, Qiita, and Zenn.
+Prefer `web` over bespoke scraping for documentation, release notes, blog posts, note, Zenn, and other generic sites. Use the dedicated `qiita` channel when you need direct Qiita search.

@@ -34,7 +34,7 @@ def test_check_reports_ok_when_authenticated():
     ):
         status, message = channel.check()
     assert status == "ok"
-    assert "tweet reads" in message
+    assert "user posts" in message
 
 
 def test_check_reports_warn_when_not_authenticated():
@@ -75,3 +75,5 @@ def test_check_passes_config_credentials_into_status(tmp_path):
     assert status == "ok"
     assert captured["env"]["AUTH_TOKEN"] == "auth-token"
     assert captured["env"]["CT0"] == "ct0-token"
+    assert captured["env"]["PYTHONIOENCODING"] == "utf-8"
+    assert captured["env"]["PYTHONUTF8"] == "1"

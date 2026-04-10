@@ -1,7 +1,7 @@
 [project]
 name = "agent-reach"
-version = "1.4.0"
-description = "Windows-first research integration tooling with a Python SDK and JSON CLI for web, GitHub, YouTube, RSS, Exa, and optional Twitter/X."
+version = "1.5.0"
+description = "Windows-first research integration tooling with a Python SDK and JSON CLI for web, GitHub, Hatena Bookmark, Bluesky, Qiita, YouTube, RSS, Exa, and optional Twitter/X."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -9,7 +9,7 @@ authors = [{name = "Neo Reid"}]
 keywords = [
     "codex", "windows", "research", "integration",
     "python-sdk", "json-cli", "github-actions", "discord-bot",
-    "mcp", "web-reader", "github", "youtube", "rss", "twitter",
+    "mcp", "web-reader", "github", "hatena-bookmark", "bluesky", "qiita", "youtube", "rss", "twitter",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

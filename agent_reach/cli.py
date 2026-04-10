@@ -25,7 +25,16 @@ from agent_reach.utils.paths import (
     render_ytdlp_fix_command,
 )
 
-CORE_CHANNELS = ("web", "exa_search", "github", "youtube", "rss")
+CORE_CHANNELS = (
+    "web",
+    "exa_search",
+    "github",
+    "hatena_bookmark",
+    "bluesky",
+    "qiita",
+    "youtube",
+    "rss",
+)
 OPTIONAL_CHANNELS = ("twitter",)
 ALL_OPTIONAL_CHANNELS = set(OPTIONAL_CHANNELS)
 

@@ -28,6 +28,21 @@ class _Namespace:
 
         return self._client.collect(self._channel, "search", value, limit=limit)
 
+    def user(self, value: str, limit: int | None = None) -> CollectionResult:
+        """Run a profile lookup operation when supported by this channel."""
+
+        return self._client.collect(self._channel, "user", value, limit=limit)
+
+    def user_posts(self, value: str, limit: int | None = None) -> CollectionResult:
+        """Run a user posts lookup operation when supported by this channel."""
+
+        return self._client.collect(self._channel, "user_posts", value, limit=limit)
+
+    def tweet(self, value: str, limit: int | None = None) -> CollectionResult:
+        """Run a single tweet/thread lookup operation when supported by this channel."""
+
+        return self._client.collect(self._channel, "tweet", value, limit=limit)
+
 
 class AgentReachClient:
     """Public SDK for diagnostics, registry lookups, and read-only collection."""
@@ -38,6 +53,10 @@ class AgentReachClient:
         self.exa = _Namespace(self, "exa_search")
         self.exa_search = self.exa
         self.github = _Namespace(self, "github")
+        self.hatena_bookmark = _Namespace(self, "hatena_bookmark")
+        self.hatena = self.hatena_bookmark
+        self.bluesky = _Namespace(self, "bluesky")
+        self.qiita = _Namespace(self, "qiita")
         self.youtube = _Namespace(self, "youtube")
         self.rss = _Namespace(self, "rss")
         self.twitter = _Namespace(self, "twitter")

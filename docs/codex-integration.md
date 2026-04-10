@@ -31,6 +31,9 @@ agent-reach export-integration --client codex --format json
 - `web`
 - `exa_search`
 - `github`
+- `hatena_bookmark`
+- `bluesky`
+- `qiita`
 - `youtube`
 - `rss`
 - `twitter` (optional)

@@ -2,14 +2,15 @@
 
 All notable changes to this fork are documented here.
 
-## Unreleased
+## [1.5.0] - 2026-04-10
 
 ### Added
 
 - `AgentReachClient` as the primary external Python SDK
 - `agent-reach collect --json` as the thin read-only CLI collection surface
 - normalized `CollectionResult` and `NormalizedItem` envelopes with backend-native `raw` payloads
-- dedicated collection adapters for `web`, `exa_search`, `github`, `youtube`, `rss`, and `twitter`
+- dedicated collection adapters for `web`, `exa_search`, `github`, `hatena_bookmark`, `bluesky`, `qiita`, `youtube`, `rss`, and `twitter`
+- `twitter` collection operations for `user`, `user_posts`, and `tweet`
 - Python SDK documentation and external usage examples for bots and CI jobs
 
 ### Changed
@@ -17,6 +18,8 @@ All notable changes to this fork are documented here.
 - positioned the fork around external integration, diagnostics, and read-only collection
 - updated Codex integration exports and plugin metadata to include collection guidance
 - aligned docs, skill references, and machine-readable channel metadata around supported operations
+- translated common Twitter/X search tokens such as `from:`, `has:`, and `type:` into stable collect behavior
+- forced UTF-8 subprocess settings for downstream CLI integrations on Windows
 
 ### Removed
 
