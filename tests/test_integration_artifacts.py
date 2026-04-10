@@ -117,8 +117,10 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
     assert payload["plugin_manifest_inline"]["skills"] == payload["skill"]["source"]
     assert payload["plugin_manifest_inline"]["mcpServers"] == "../.mcp.json"
     assert payload["mcp_config_inline"]["mcpServers"]["exa"]["url"] == "https://mcp.exa.ai/mcp"
-    assert payload["suggested_destinations"]["plugin_manifest"].endswith(".codex-plugin\\plugin.json")
-    assert payload["suggested_destinations"]["mcp_config"].endswith(".mcp.json")
+    plugin_destination = Path(payload["suggested_destinations"]["plugin_manifest"])
+    mcp_destination = Path(payload["suggested_destinations"]["mcp_config"])
+    assert plugin_destination.parts[-2:] == (".codex-plugin", "plugin.json")
+    assert mcp_destination.name == ".mcp.json"
     assert payload["documentation_summary"]
     assert payload["inline_payload_notes"]
     assert payload["external_project_usage"]["github_actions"]["uses"].startswith("iwachacha/Agent-Reach/")

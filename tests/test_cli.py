@@ -37,7 +37,8 @@ class TestCLI:
         assert "GitHub.cli" in output
         assert "yt-dlp.yt-dlp" in output
         assert "npm install -g mcporter" in output
-        assert ".mcporter\\mcporter.json" in output
+        assert ".mcporter" in output
+        assert "mcporter.json" in output
         assert "uv tool install twitter-cli" in output
         assert "FIX-YTDLP" in output
 
