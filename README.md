@@ -125,6 +125,7 @@ Reusable examples live under `examples/` and `.github/workflows/agent-reach-smok
 - Codex integration: [docs/codex-integration.md](docs/codex-integration.md)
 - Codex compatibility: [docs/codex-compatibility.md](docs/codex-compatibility.md)
 - Field research improvements: [docs/field-research-improvements-2026-04-10.md](docs/field-research-improvements-2026-04-10.md)
+- 大規模調査進化リサーチ: [docs/agent-reach-scale-evolution-research-2026-04-10.md](docs/agent-reach-scale-evolution-research-2026-04-10.md)
 - Agent Reach Nexus concept: [docs/agent-reach-nexus-concept.md](docs/agent-reach-nexus-concept.md)
 - Troubleshooting: [docs/troubleshooting.md](docs/troubleshooting.md)
 
