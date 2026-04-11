@@ -320,14 +320,40 @@ def _body_for_mode(body: object, body_mode: str) -> str | None:
 
 
 def _entry_for_body_mode(entry: dict, body_mode: str) -> dict:
-    if body_mode == "full":
-        return entry
-    output = dict(entry)
-    if body_mode == "none":
-        output.pop("body", None)
-    elif body_mode == "snippet" and "body" in output:
-        output["body"] = _body_for_mode(output.get("body"), body_mode)
-    return output
+    output = {
+        "id": entry.get("id"),
+        "title": entry.get("title"),
+        "url": entry.get("url"),
+        "created_at": entry.get("created_at"),
+        "updated_at": entry.get("updated_at"),
+        "likes_count": entry.get("likes_count"),
+        "stocks_count": entry.get("stocks_count"),
+        "comments_count": entry.get("comments_count"),
+        "reactions_count": entry.get("reactions_count"),
+        "page_views_count": entry.get("page_views_count"),
+        "private": entry.get("private"),
+    }
+    body = _body_for_mode(entry.get("body"), body_mode)
+    if body is not None:
+        output["body"] = body
+    tags = [tag.get("name") for tag in entry.get("tags") or [] if isinstance(tag, dict) and tag.get("name")]
+    if tags:
+        output["tags"] = tags
+    user = _raw_user_for_entry(entry)
+    if user:
+        output["user"] = user
+    return {key: value for key, value in output.items() if value not in (None, [], {})}
+
+
+def _raw_user_for_entry(entry: dict) -> dict:
+    raw_user = entry.get("user")
+    user = raw_user if isinstance(raw_user, dict) else {}
+    output = {
+        "id": user.get("id"),
+        "name": user.get("name"),
+        "profile_image_url": user.get("profile_image_url"),
+    }
+    return {key: value for key, value in output.items() if value not in (None, "")}
 
 
 def _media_references_for_entry(entry: dict, body_mode: str) -> list[dict]:

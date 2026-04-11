@@ -143,7 +143,28 @@ def _blocking_and_advisory_not_ready(
     return blocking, advisory
 
 
-def summarize_results(results: Dict[str, dict], *, exit_policy: str = "core") -> dict:
+def _probe_attention(results: Dict[str, dict], *, probe: bool = False) -> list[dict[str, Any]]:
+    attention: list[dict[str, Any]] = []
+    for item in results.values():
+        if not item.get("supports_probe"):
+            continue
+        probe_coverage = str(item.get("probe_coverage") or "none")
+        probe_run_coverage = str(item.get("probe_run_coverage") or "not_run")
+        include = probe_coverage != "full" or (probe and probe_run_coverage != "full")
+        if not include:
+            continue
+        attention.append(
+            {
+                "name": item.get("name"),
+                "probe_coverage": probe_coverage,
+                "probe_run_coverage": probe_run_coverage,
+                "unprobed_operations": [str(op) for op in item.get("unprobed_operations") or []],
+            }
+        )
+    return attention
+
+
+def summarize_results(results: Dict[str, dict], *, probe: bool = False, exit_policy: str = "core") -> dict:
     """Build a stable summary block for machine-readable output."""
 
     values = list(results.values())
@@ -151,6 +172,7 @@ def summarize_results(results: Dict[str, dict], *, exit_policy: str = "core") ->
     optional = [item for item in values if item["tier"] != 0]
     exit_code = doctor_exit_code(results, exit_policy=exit_policy)
     blocking, advisory = _blocking_and_advisory_not_ready(results, exit_policy=exit_policy)
+    probe_attention = _probe_attention(results, probe=probe)
     return {
         "total": len(values),
         "ready": sum(1 for item in values if item["status"] == "ok"),
@@ -170,6 +192,7 @@ def summarize_results(results: Dict[str, dict], *, exit_policy: str = "core") ->
             "total": len(optional),
             "ready": sum(1 for item in optional if item["status"] == "ok"),
         },
+        "probe_attention": probe_attention,
     }
 
 
@@ -203,7 +226,7 @@ def make_doctor_payload(
         "schema_version": SCHEMA_VERSION,
         "generated_at": utc_timestamp(),
         "probe": probe,
-        "summary": summarize_results(results, exit_policy=exit_policy),
+        "summary": summarize_results(results, probe=probe, exit_policy=exit_policy),
         "channels": list(results.values()),
     }
 
@@ -233,7 +256,7 @@ def format_report(results: Dict[str, dict], probe: bool = False, *, exit_policy:
             return f"  [red][OFF][/red] {label}"
         return f"  [red][ERR][/red] {label}"
 
-    summary = summarize_results(results, exit_policy=exit_policy)
+    summary = summarize_results(results, probe=probe, exit_policy=exit_policy)
     lines = [
         "[bold cyan]Agent Reach Health[/bold cyan]",
         "[cyan]========================================[/cyan]",
@@ -267,5 +290,23 @@ def format_report(results: Dict[str, dict], probe: bool = False, *, exit_policy:
             if item["name"] in summary["advisory_not_ready"]
         ]
         lines.append(f"Advisory only: {', '.join(labels)}")
+    if summary["probe_attention"]:
+        lines.append("Probe attention:")
+        for item in summary["probe_attention"]:
+            label = next(
+                (
+                    result.get("description") or result.get("name", "unknown")
+                    for result in results.values()
+                    if result.get("name") == item["name"]
+                ),
+                item["name"] or "unknown",
+            )
+            unprobed = ", ".join(item["unprobed_operations"]) if item["unprobed_operations"] else "none"
+            lines.append(
+                "  "
+                f"{label} (coverage: {item['probe_coverage']}; "
+                f"run: {item['probe_run_coverage']}; "
+                f"unprobed: {unprobed})"
+            )
 
     return "\n".join(lines)

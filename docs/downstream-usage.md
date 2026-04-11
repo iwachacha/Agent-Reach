@@ -19,6 +19,14 @@ agent-reach version
 agent-reach doctor --json --probe
 ```
 
+To refresh a global install to an exact pushed ref, use:
+
+```powershell
+uv tool install --force git+<remote-url>@<ref>
+agent-reach skill --install
+agent-reach version
+```
+
 After that, Codex can use Agent Reach from any project by calling the CLI:
 
 ```powershell
@@ -55,23 +63,28 @@ When Codex is working inside an arbitrary project:
 
 - Use the globally installed `agent-reach` CLI by default.
 - Do not copy Agent Reach repo files into the project unless the user explicitly asks for repo-local plugin artifacts.
+- Agent Reach does not choose request scale, investigation routes, source mix, ranking, summarization, or posting.
+- The caller chooses scope. Do not auto-escalate a lightweight request into large-scale research.
 - Use `agent-reach collect --json` as the stable handoff to project code.
 - Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel pagination or time-window options.
 - Add `--save .agent-reach/evidence.jsonl` when the run needs an auditable evidence trail.
 - Validate ledgers with `agent-reach ledger validate --json` before treating them as CI artifacts.
 - Use `agent-reach plan candidates` for lightweight URL or ID dedupe before follow-up reads.
+- Keep `agent-reach plan candidates` at the default `--limit 20` unless the caller explicitly wants a broader candidate set.
+- Treat `batch` and `scout` as explicit opt-in helpers rather than the default route for everyday collection.
 - Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project.
 - Treat optional channel failures as partial results unless strict completeness is required.
 
-Large-scale research should use bounded fan-out:
+Large-scale research is explicit opt-in. When the caller asks for it, use bounded fan-out:
 
 1. Start with 2-4 broad discovery queries at `--limit 5` to `--limit 10`.
 2. Choose page, cursor, and time-window inputs from the live channel contract when a task needs bounded multi-page collection.
-3. Save raw `CollectionResult` JSONL with `--save .agent-reach/evidence.jsonl`.
-4. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json`.
-5. Use specialist channels when the source is known.
-6. Deep-read only selected URLs with `web`.
-7. Persist raw ledgers and candidate plans as artifacts in CI when traceability matters.
+3. If a saved batch plan is involved, run `agent-reach batch --plan PLAN.json --validate-only --json` before any write-producing batch execution.
+4. Save raw `CollectionResult` JSONL with `--save .agent-reach/evidence.jsonl`.
+5. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json`.
+6. Use specialist channels when the source is known.
+7. Deep-read only selected URLs with `web`.
+8. Persist raw ledgers and candidate plans as artifacts in CI when traceability matters.
 
 ## GitHub Actions
 
@@ -186,7 +199,7 @@ Map `payload["items"]` to the bot's normalized item type:
 - `published_at` -> item timestamp
 - `extras.metrics` / channel-specific extras -> engagement, linked media references, labels, source hints, or diagnostics
 
-Use `agent-reach doctor --json --probe` in CI or scheduled workflows when readiness matters. By default, `doctor --json` uses the `core` exit policy: optional gaps appear in `summary.advisory_not_ready` rather than failing the command. Use `--exit-policy all` for strict all-channel readiness. Treat Twitter/X as optional: authenticated-but-unprobed status is a `warn` with `usability_hint=authenticated_but_unprobed`, while `doctor --json --probe` separates live `user` and `search` readiness under `operation_statuses`. Use `channels --json` fields such as `probe_operations` and `probe_coverage`, plus doctor fields such as `probed_operations`, `unprobed_operations`, and `probe_run_coverage`, when downstream automation needs to know whether a probe covered every operation or only a subset.
+Use `agent-reach doctor --json --probe` in CI or scheduled workflows when readiness matters. By default, `doctor --json` uses the `core` exit policy: optional gaps appear in `summary.advisory_not_ready` rather than failing the command. Use `--exit-policy all` for strict all-channel readiness. Treat Twitter/X as optional: authenticated-but-unprobed status is a `warn` with `usability_hint=authenticated_but_unprobed`, while `doctor --json --probe` separates live `user` and `search` readiness under `operation_statuses`. Use `channels --json` fields such as `probe_operations` and `probe_coverage`, plus doctor fields such as `probed_operations`, `unprobed_operations`, `probe_run_coverage`, and `summary.probe_attention`, when downstream automation needs to know whether a probe covered every operation or only a subset.
 
 When a channel exposes bounded pagination or time-window controls, `channels --json` `operation_contracts` now lists those options directly. Downstream code should decide whether to use `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach only forwards them and records the resulting pagination metadata under both flat `meta` keys and `meta.pagination`.
 

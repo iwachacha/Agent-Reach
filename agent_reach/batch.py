@@ -28,6 +28,31 @@ class BatchPlanError(Exception):
     """Raised when a batch plan cannot be executed."""
 
 
+def validate_batch_plan(
+    plan_path: str | Path,
+    *,
+    quality: str | None = None,
+) -> dict[str, Any]:
+    """Validate a JSON batch plan without collecting or writing ledger data."""
+
+    path, _plan, normalized_queries, failure_policy, requested_quality = _prepare_batch_plan(
+        plan_path,
+        quality=quality,
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": utc_timestamp(),
+        "command": "batch",
+        "cli_version": __version__,
+        "validate_only": True,
+        "valid": True,
+        "plan": str(path),
+        "failure_policy": failure_policy,
+        "quality_profile": requested_quality,
+        "summary": _plan_summary(normalized_queries),
+    }
+
+
 def run_batch_plan(
     plan_path: str | Path,
     *,
@@ -52,24 +77,11 @@ def run_batch_plan(
         if save_dir_path.exists() and not save_dir_path.is_dir():
             raise BatchPlanError("save_dir must point to a directory")
 
-    path = Path(plan_path)
-    try:
-        plan = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise BatchPlanError(f"Could not read batch plan: {exc}") from exc
-    except json.JSONDecodeError as exc:
-        raise BatchPlanError(f"Invalid batch plan JSON: {exc.msg}") from exc
-    if not isinstance(plan, dict):
-        raise BatchPlanError("batch plan must be a JSON object")
-
-    queries = plan.get("queries") or plan.get("pilot_queries") or []
-    if not isinstance(queries, list):
-        raise BatchPlanError("batch plan queries must be a list")
-    normalized_queries = [_normalize_query(query, index) for index, query in enumerate(queries)]
-
+    path, plan, normalized_queries, failure_policy, requested_quality = _prepare_batch_plan(
+        plan_path,
+        quality=quality,
+    )
     run_id = str(plan.get("run_id") or default_run_id())
-    failure_policy = str(plan.get("failure_policy") or "partial")
-    requested_quality = quality or plan.get("quality_profile") or "precision"
     save_target = save_dir or save_path
     completed_keys = _completed_query_keys(save_target) if resume and save_target is not None else set()
     statuses: list[dict[str, Any] | None] = [None] * len(normalized_queries)
@@ -225,6 +237,26 @@ def render_batch_text(payload: dict[str, Any]) -> str:
     """Render a batch manifest for humans."""
 
     summary = payload["summary"]
+    if payload.get("validate_only"):
+        lines = [
+            "Agent Reach Batch Validation",
+            "========================================",
+            f"Plan: {payload['plan']}",
+            f"Valid: {'yes' if payload.get('valid') else 'no'}",
+            f"Failure policy: {payload['failure_policy']}",
+            f"Quality profile: {payload['quality_profile']}",
+            f"Queries: {summary['query_count']}",
+        ]
+        if summary["channel_counts"]:
+            lines.append(f"Channels: {_render_counts(summary['channel_counts'])}")
+        if summary["operation_counts"]:
+            lines.append(f"Operations: {_render_counts(summary['operation_counts'])}")
+        if summary["intent_counts"]:
+            lines.append(f"Intents: {_render_counts(summary['intent_counts'])}")
+        if summary["source_role_counts"]:
+            lines.append(f"Source roles: {_render_counts(summary['source_role_counts'])}")
+        return "\n".join(lines)
+
     lines = [
         "Agent Reach Batch",
         "========================================",
@@ -239,6 +271,34 @@ def render_batch_text(payload: dict[str, Any]) -> str:
         f"Items: {summary['items']}",
     ]
     return "\n".join(lines)
+
+
+def _load_batch_plan(path: Path) -> dict[str, Any]:
+    try:
+        plan = json.loads(path.read_text(encoding="utf-8-sig"))
+    except OSError as exc:
+        raise BatchPlanError(f"Could not read batch plan: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise BatchPlanError(f"Invalid batch plan JSON: {exc.msg}") from exc
+    if not isinstance(plan, dict):
+        raise BatchPlanError("batch plan must be a JSON object")
+    return plan
+
+
+def _prepare_batch_plan(
+    plan_path: str | Path,
+    *,
+    quality: str | None = None,
+) -> tuple[Path, dict[str, Any], list[dict[str, Any]], str, str]:
+    path = Path(plan_path)
+    plan = _load_batch_plan(path)
+    queries = plan.get("queries") or plan.get("pilot_queries") or []
+    if not isinstance(queries, list):
+        raise BatchPlanError("batch plan queries must be a list")
+    normalized_queries = [_normalize_query(query, index) for index, query in enumerate(queries)]
+    failure_policy = str(plan.get("failure_policy") or "partial")
+    requested_quality = str(quality or plan.get("quality_profile") or "precision")
+    return path, plan, normalized_queries, failure_policy, requested_quality
 
 
 def _normalize_query(raw_query: Any, index: int) -> dict[str, Any]:
@@ -264,6 +324,26 @@ def _normalize_query(raw_query: Any, index: int) -> dict[str, Any]:
     except OperationContractError as exc:
         raise BatchPlanError(f"query {index + 1} is invalid: {exc.message}") from exc
     return query
+
+
+def _count_values(values: list[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        if value is None or value == "":
+            continue
+        text = str(value)
+        counts[text] = counts.get(text, 0) + 1
+    return counts
+
+
+def _plan_summary(queries: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "query_count": len(queries),
+        "channel_counts": _count_values([query.get("channel") for query in queries]),
+        "operation_counts": _count_values([query.get("operation") for query in queries]),
+        "intent_counts": _count_values([query.get("intent") for query in queries]),
+        "source_role_counts": _count_values([query.get("source_role") for query in queries]),
+    }
 
 
 def _query_key(
@@ -396,3 +476,7 @@ def _summary(statuses: list[dict[str, Any]]) -> dict[str, Any]:
         "duplicate_urls": len(urls) - len(unique_urls),
         "source_roles": source_roles,
     }
+
+
+def _render_counts(counts: dict[str, int]) -> str:
+    return ", ".join(f"{key}={value}" for key, value in counts.items())

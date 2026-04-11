@@ -115,6 +115,29 @@ def test_web_adapter_http_error(config, monkeypatch):
     assert payload["error"]["code"] == "http_error"
 
 
+def test_web_adapter_http_status_reports_reader_dns_error(config, monkeypatch):
+    class FakeResponse:
+        status_code = 400
+        text = "ParamValidationError(url): Domain 'docs.hyperbrowser.ai' could not be resolved"
+
+    class FakeRequests:
+        RequestException = RuntimeError
+
+        @staticmethod
+        def get(_url, headers=None, timeout=None):
+            return FakeResponse()
+
+    monkeypatch.setattr("agent_reach.adapters.web._import_requests", lambda: FakeRequests)
+
+    payload = WebAdapter(config=config).read("https://docs.hyperbrowser.ai/agents/browser-use")
+
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "dns_error"
+    assert payload["meta"]["reader_status_code"] == 400
+    assert payload["error"]["details"]["unresolved_domain"] == "docs.hyperbrowser.ai"
+    assert "could not be resolved" in payload["raw"]
+
+
 def test_exa_adapter_success(config, monkeypatch):
     adapter = ExaSearchAdapter(config=config)
     monkeypatch.setattr(adapter, "command_path", lambda _name: "mcporter")
@@ -515,6 +538,7 @@ def test_qiita_adapter_success(config, monkeypatch):
                     "title": "Qiita article",
                     "url": "https://qiita.com/Qiita/items/abc123",
                     "body": "markdown body ![diagram](https://cdn.qiita.com/diagram.png)",
+                    "rendered_body": "<p>markdown body</p>",
                     "created_at": "2026-04-10T00:00:00+09:00",
                     "updated_at": "2026-04-10T01:00:00+09:00",
                     "likes_count": 10,
@@ -543,6 +567,8 @@ def test_qiita_adapter_success(config, monkeypatch):
     assert payload["items"][0]["author"] == "Qiita"
     assert payload["items"][0]["text"] == "markdown body ![diagram](https://cdn.qiita.com/diagram.png)"
     assert payload["raw"][0]["body"] == "markdown body ![diagram](https://cdn.qiita.com/diagram.png)"
+    assert payload["raw"][0]["tags"] == ["Python"]
+    assert "rendered_body" not in payload["raw"][0]
     assert payload["items"][0]["extras"]["media_references"] == [
         {
             "type": "image",
@@ -1640,6 +1666,10 @@ def test_mcp_registry_search_success(config, monkeypatch):
             "source_field": "server.iconUrl",
         }
     ]
+    assert payload["raw"]["matched_count"] == 1
+    assert payload["raw"]["pages"][0]["matched_count"] == 1
+    assert payload["raw"]["pages"][0]["matched_entries"][0]["server"]["name"] == "ac.tandem/docs-mcp"
+    assert "unknownPreviewField" not in payload["raw"]["pages"][0]["matched_entries"][0]["server"]
     assert payload["items"][0]["extras"]["source_hints"]["source_kind"] == "registry_entry"
     assert payload["meta"]["pages_fetched"] == 1
 

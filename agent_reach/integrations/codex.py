@@ -186,17 +186,21 @@ def _mcp_config_inline(repo_root: Path) -> dict[str, Any]:
 def _documentation_summary() -> list[str]:
     return [
         "Use `agent-reach collect --json` as the primary external interface in arbitrary projects.",
+        "Let the calling workflow choose request scale, channels, pagination, ranking, summarization, and posting; Agent Reach exposes capabilities but does not choose scope for the caller.",
         "Inspect `agent-reach channels --json` operation contracts before choosing per-channel options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` downstream.",
         "Add `--save .agent-reach/evidence.jsonl` when a research run needs an auditable raw CollectionResult ledger.",
         "Use `agent-reach ledger validate --input .agent-reach/evidence.jsonl --json` before treating saved evidence as a CI artifact.",
         "Use `agent-reach ledger append --input RESULT.json --output .agent-reach/evidence.jsonl --json` to add a successful conditional collection captured without `--save`.",
+        "Use `agent-reach batch --plan PLAN.json --validate-only --json` as a non-mutating preflight before any large-scale batch run.",
         "Use `agent-reach plan candidates --input .agent-reach/evidence.jsonl --json` for no-model URL or ID dedupe before follow-up reads.",
         "`doctor --json` defaults to core exit policy: tier 0 channels affect the exit code, while optional setup gaps are listed under `summary.advisory_not_ready`.",
+        "Inspect `doctor.summary.probe_attention` when a channel supports only partial probe coverage or a probe run left operations unprobed.",
         "Treat `extras.source_hints`, `extras.media_references`, and web extraction hygiene metadata as diagnostics only, not ranking or trust scores.",
         "YouTube collection exposes video metadata, subtitle/caption availability, thumbnail references, and normalized linked media references, not video binary analysis.",
         "Use `agent-reach channels --json`, `doctor --json`, and `doctor --json --probe` for discovery and diagnostics.",
         "Tool installs expose the CLI. Import `AgentReachClient` only after installing Agent Reach into the caller Python environment.",
         "If `plugin_manifest` or `mcp_config` is null, write the inline payloads to the suggested destinations instead.",
+        "After pushing a custom ref, refresh a global install with `uv tool install --force git+<remote-url>@<ref>` and then rerun `agent-reach skill --install`.",
     ]
 
 
@@ -222,6 +226,7 @@ def _external_project_usage() -> dict[str, Any]:
             "notes": [
                 "The skill install writes to the user's Codex skill home, not to the downstream project.",
                 "Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files when using the CLI.",
+                "After pushing a custom ref, refresh the global install with `uv tool install --force git+<remote-url>@<ref>` and rerun `agent-reach skill --install`.",
             ],
         },
         "github_actions": {
@@ -244,33 +249,50 @@ def _external_project_usage() -> dict[str, Any]:
                 "Validate saved evidence with `agent-reach ledger validate --json` before downstream ingestion.",
             ],
         },
-    }
+}
 
 
-def _codex_runtime_policy() -> dict[str, Any]:
-    """Give Codex a compact, explicit operating policy for arbitrary projects."""
+def _request_scale_policy() -> dict[str, Any]:
+    """Describe caller-controlled request sizing for downstream integrations."""
 
     return {
-        "default_interface": "agent-reach collect --json",
-        "no_copy_rule": (
-            "Use the globally installed CLI and skill. Do not copy `.codex-plugin`, `.mcp.json`, "
-            "or Agent Reach source files into a downstream repository unless the user explicitly asks for repo-local artifacts."
+        "principle": (
+            "Agent Reach exposes flexible collection capabilities. The calling workflow chooses "
+            "scope, routes, channels, ranking, summarization, and posting."
         ),
-        "decision_order": [
-            "If readiness is unknown, run `agent-reach channels --json` and `agent-reach doctor --json` first.",
-            "Read `doctor.summary.blocking_not_ready` and `doctor.summary.advisory_not_ready`; use `--exit-policy all` only when every optional channel must be ready.",
-            "Inspect the live channel contract and let the calling workflow choose channels for the user's task.",
-            "Inspect `operation_contracts` and let the calling workflow choose bounded pagination or time-window inputs such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` when a channel supports them.",
-            "Use specialist channels such as `github`, `qiita`, `bluesky`, `rss`, `youtube`, `hatena_bookmark`, `hacker_news`, `mcp_registry`, `reddit`, `searxng`, or `crawl4ai` only when the caller's task and readiness checks support them.",
-            "Use Twitter/X only when optional credentials and `doctor --json --probe` show the required operation is ready.",
-            "Treat `source_hints`, `media_references`, `text_length`, `link_count`, and `extraction_warning` as diagnostic metadata only.",
-            "Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project.",
+        "rules": [
+            "Agent Reach does not choose request scale, collection routes, source mix, ranking, summarization, or posting.",
+            "Keep light requests light; do not auto-escalate a narrow ask into large-scale research.",
+            "`collect --json` remains the default interface for thin downstream collection.",
+            "`batch` and `scout` are explicit opt-in helpers, not the default route for everyday collection.",
+            "`plan candidates` keeps its default `--limit 20`; raise it only when the caller explicitly wants a wider review set.",
+            "Large-scale research is explicit opt-in and should be requested by the caller or host workflow.",
         ],
+        "single_collect": {
+            "intent": "narrow asks and lightweight verification",
+            "pattern": "single normalized collect or read",
+            "recommended_commands": [
+                "Run one `agent-reach collect --json` command, or a very small caller-chosen set of collection commands.",
+                "Do not reach for `batch`, `scout`, or evidence-ledger fan-out unless the caller explicitly asks for a broader run.",
+            ],
+        },
+        "bounded_multi_source": {
+            "intent": "small comparisons and targeted cross-checks",
+            "pattern": "caller-chosen small multi-source collection",
+            "recommended_commands": [
+                "Use a small number of `collect --json` calls across ready channels that match the task.",
+                "Choose pagination and time-window controls from the live operation contract only when the caller wants them.",
+                "Use `batch` only if the caller explicitly wants a plan-driven run; it is not required for bounded multi-source work.",
+            ],
+        },
         "large_scale_research": {
+            "intent": "explicit opt-in broad research runs",
             "pattern": "bounded fan-out with normalized JSON handoff",
+            "explicit_opt_in": True,
             "steps": [
                 "Start with 2-4 broad discovery queries at small limits such as 5-10.",
                 "Inspect `channels --json` operation contracts and choose any page, cursor, or time-window options downstream instead of relying on a fixed Agent Reach route.",
+                "Run `agent-reach batch --plan PLAN.json --validate-only --json` before executing a saved batch plan.",
                 "Append raw collection envelopes with `--save .agent-reach/evidence.jsonl` when traceability matters.",
                 "Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json` for no-model dedupe.",
                 "Apply downstream ranking, summarization, and selection before deeper reads.",
@@ -285,10 +307,37 @@ def _codex_runtime_policy() -> dict[str, Any]:
                 "deep_reads_per_round": 10,
             },
         },
+    }
+
+
+def _codex_runtime_policy() -> dict[str, Any]:
+    """Give Codex a compact, explicit operating policy for arbitrary projects."""
+
+    request_scale_policy = _request_scale_policy()
+    return {
+        "default_interface": "agent-reach collect --json",
+        "no_copy_rule": (
+            "Use the globally installed CLI and skill. Do not copy `.codex-plugin`, `.mcp.json`, "
+            "or Agent Reach source files into a downstream repository unless the user explicitly asks for repo-local artifacts."
+        ),
+        "decision_order": [
+            "If readiness is unknown, run `agent-reach channels --json` and `agent-reach doctor --json` first.",
+            "Read `doctor.summary.blocking_not_ready`, `doctor.summary.advisory_not_ready`, and `doctor.summary.probe_attention`; use `--exit-policy all` only when every optional channel must be ready.",
+            "Let the caller choose request scale first: keep narrow asks as `collect`, use bounded multi-source collection only when needed, and treat large-scale research as explicit opt-in.",
+            "Inspect the live channel contract and let the calling workflow choose channels for the user's task.",
+            "Inspect `operation_contracts` and let the calling workflow choose bounded pagination or time-window inputs such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` when a channel supports them.",
+            "Use specialist channels such as `github`, `qiita`, `bluesky`, `rss`, `youtube`, `hatena_bookmark`, `hacker_news`, `mcp_registry`, `reddit`, `searxng`, or `crawl4ai` only when the caller's task and readiness checks support them.",
+            "Use Twitter/X only when optional credentials and `doctor --json --probe` show the required operation is ready.",
+            "Treat `source_hints`, `media_references`, `text_length`, `link_count`, and `extraction_warning` as diagnostic metadata only.",
+            "Keep ranking, summarization, scheduling, Discord publishing, and state in the downstream project.",
+        ],
+        "request_scale_policy": request_scale_policy,
+        "large_scale_research": request_scale_policy["large_scale_research"],
         "failure_policy": [
             "Do not fall back to backend-specific CLIs unless debugging a failed Agent Reach operation.",
             "If `doctor --json` marks an optional channel warn, continue with ready channels unless that channel is essential.",
             "For optional or credential/runtime-gated channels, report operation-level readiness and the JSON error envelope separately.",
+            "Inspect `doctor.summary.probe_attention` before assuming probe coverage is complete for a channel.",
             "For Twitter/X, authenticated-but-unprobed `warn` means collection may work but operation readiness is unverified until `doctor --json --probe`.",
         ],
     }
@@ -421,6 +470,8 @@ def render_codex_integration_text(payload: dict[str, Any]) -> str:
     lines.append(f"  preferred interface: {payload['external_project_usage']['preferred_interface']}")
     lines.append(f"  Codex default interface: {payload['codex_runtime_policy']['default_interface']}")
     lines.append(f"  no-copy rule: {payload['codex_runtime_policy']['no_copy_rule']}")
+    lines.append("  request scale: caller chooses scope; large-scale research is explicit opt-in")
+    lines.append("  default plan candidates limit: 20")
 
     lines.extend(["", "Required commands:"])
     for command in payload["required_commands"]:

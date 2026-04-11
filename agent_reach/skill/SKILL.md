@@ -18,20 +18,25 @@ This fork is intentionally narrow. Treat it as:
 - a thin read-only collection surface
 
 Do not assume this fork owns scheduling, ranking, summarization, or publishing. Those remain responsibilities of the host project.
+Do not assume this fork chooses investigation scope. The caller chooses scale, routes, source mix, ranking, summarization, and posting.
 
 ## Operating Rules For Codex
 
 - Default to the globally installed `agent-reach` CLI in any downstream repository.
 - Do not ask the user to copy `.codex-plugin`, `.mcp.json`, `agent_reach/skill`, or Agent Reach source files into the downstream repository unless they explicitly ask for repo-local plugin artifacts.
 - Use `agent-reach collect --json` as the stable handoff. Preserve the returned `CollectionResult` JSON when another system will rank, summarize, dedupe, or publish it.
+- Keep lightweight asks lightweight. Do not auto-escalate a narrow request into large-scale research.
 - Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`.
 - Use `agent-reach collect --json --save .agent-reach/evidence.jsonl` when a research run needs provenance across multiple commands.
 - Use `agent-reach plan candidates --input .agent-reach/evidence.jsonl --json` for lightweight URL or ID dedupe before selected follow-up reads.
+- Keep `agent-reach plan candidates` at the default `--limit 20` unless the caller explicitly wants a broader candidate set.
 - Use `agent-reach ledger validate --input .agent-reach/evidence.jsonl --json` when downstream automation needs to prove the evidence ledger is parseable.
 - Use `agent-reach ledger append --input RESULT.json --output .agent-reach/evidence.jsonl --json` when a successful conditional collection was captured without `--save`.
 - Treat `extras.source_hints`, `extras.media_references`, and web extraction hygiene fields as diagnostics only, not ranking or trust scores.
 - Treat `doctor --json` as core-blocking by default: tier 0 failures affect the exit code, while optional setup gaps appear under `summary.advisory_not_ready`.
-- For large research tasks, fan out bounded searches, use `plan candidates` for no-model dedupe, then deep-read only selected URLs.
+- Inspect `doctor.summary.probe_attention` when a channel has partial probe coverage or a probe run left operations unprobed.
+- Treat `batch` and `scout` as explicit opt-in helpers. They are not the default route for everyday collection.
+- For large research tasks, only use bounded fan-out when the caller explicitly opts in; then use `plan candidates` for no-model dedupe and deep-read only selected URLs.
 - Treat optional channel failures as partial results unless the user asked for strict completeness.
 
 ## Discovery First
@@ -76,23 +81,28 @@ agent-reach export-integration --client codex --format json
 8. Use `AgentReachClient` only when the host Python environment has Agent Reach installed into it directly.
 9. Choose channels from the live `channels --json` contract for the user's task; Agent Reach does not own ranking, routing, or source policy.
 10. Choose advanced collection controls such as page, cursor, and time-window options from the live `operation_contracts`; Agent Reach does not choose collection scope for you.
-11. Use `searxng` only after `searxng-base-url` is configured or `SEARXNG_BASE_URL` is set.
-12. Use `crawl4ai` only when the optional extra and browser runtime are available; `crawl` requires an explicit `--query` goal.
-13. Use `reddit` through `rdt-cli`; it does not need Reddit OAuth, client credentials, or a User-Agent config.
-14. Treat Twitter/X as opt-in and cookie-based; authenticated-but-unprobed `warn` means collect may work, but operation readiness is unverified.
-15. In arbitrary downstream repositories, use the globally installed `agent-reach` CLI. Do not require copying Agent Reach repo files into the downstream project unless the user explicitly asks for repo-local plugin artifacts.
+11. Treat `scout` as a planning helper and capability snapshot, not the default route for a lightweight ask.
+12. Treat large-scale research as explicit opt-in. Keep narrow asks on `collect --json` unless the caller clearly wants a broader run.
+13. Use `searxng` only after `searxng-base-url` is configured or `SEARXNG_BASE_URL` is set.
+14. Use `crawl4ai` only when the optional extra and browser runtime are available; `crawl` requires an explicit `--query` goal.
+15. Use `reddit` through `rdt-cli`; it does not need Reddit OAuth, client credentials, or a User-Agent config.
+16. Treat Twitter/X as opt-in and cookie-based; authenticated-but-unprobed `warn` means collect may work, but operation readiness is unverified.
+17. In arbitrary downstream repositories, use the globally installed `agent-reach` CLI. Do not require copying Agent Reach repo files into the downstream project unless the user explicitly asks for repo-local plugin artifacts.
 
 ## Large-Scale Research Pattern
+
+Use this pattern only when the caller explicitly opts into a broader run. Do not auto-escalate a lightweight ask into this path.
 
 1. Run `agent-reach doctor --json` and inspect `operation_statuses` when readiness matters.
 2. Start with 2-4 caller-chosen discovery queries at `--limit 5` to `--limit 10`.
 3. When a channel supports pagination or time windows, choose `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` from the live contract instead of assuming one fixed route.
-4. Add source-specific searches such as `github`, `qiita`, `bluesky`, `rss`, `hacker_news`, `mcp_registry`, `reddit`, `searxng`, or `twitter` only when they match the task and are ready.
-5. Save raw `CollectionResult` envelopes with `--save .agent-reach/evidence.jsonl` when the run needs an evidence trail.
-6. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json` before deeper reads.
-7. Use `web read` for selected URLs, not every search result.
-8. Inspect source hints and web hygiene only as non-authoritative diagnostics.
-9. Return partial results with clear channel failures instead of blocking on one optional backend.
+4. If a saved batch plan exists, run `agent-reach batch --plan PLAN.json --validate-only --json` before the write-producing batch run.
+5. Add source-specific searches such as `github`, `qiita`, `bluesky`, `rss`, `hacker_news`, `mcp_registry`, `reddit`, `searxng`, or `twitter` only when they match the task and are ready.
+6. Save raw `CollectionResult` envelopes with `--save .agent-reach/evidence.jsonl` when the run needs an evidence trail.
+7. Run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json` before deeper reads.
+8. Use `web read` for selected URLs, not every search result.
+9. Inspect source hints and web hygiene only as non-authoritative diagnostics.
+10. Return partial results with clear channel failures instead of blocking on one optional backend.
 
 ## Command Routing
 

@@ -23,6 +23,7 @@ _MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)")
 _BARE_URL_RE = re.compile(r"(?<!\()https?://[^\s)]+")
 _NAV_HEAVY_LINK_THRESHOLD = 25
 _NAV_HEAVY_MAX_CHARS_PER_LINK = 120
+_READER_DNS_ERROR_RE = re.compile(r"Domain '([^']+)' could not be resolved")
 
 
 def _import_requests():
@@ -87,6 +88,23 @@ def _web_hygiene_meta(text: str) -> dict[str, int | str | None]:
     }
 
 
+def _reader_error_details(status_code: int, reader_url: str, response_text: str) -> tuple[str, str, dict[str, object]]:
+    details: dict[str, object] = {
+        "reader_url": reader_url,
+        "reader_status_code": status_code,
+    }
+    match = _READER_DNS_ERROR_RE.search(response_text or "")
+    if match:
+        details["upstream_error"] = "domain_resolution_failed"
+        details["unresolved_domain"] = match.group(1)
+        return (
+            "dns_error",
+            f"Web read failed because Jina Reader could not resolve {match.group(1)}",
+            details,
+        )
+    return "http_error", f"Web read returned HTTP {status_code}", details
+
+
 class WebAdapter(BaseAdapter):
     """Read generic web pages through Jina Reader."""
 
@@ -96,14 +114,14 @@ class WebAdapter(BaseAdapter):
     def read(self, url: str, limit: int | None = None) -> CollectionResult:
         started_at = time.perf_counter()
         normalized = _normalize_url(url)
+        reader_url = f"https://r.jina.ai/{normalized}"
         requests = _import_requests()
         try:
             response = requests.get(
-                f"https://r.jina.ai/{normalized}",
+                reader_url,
                 headers={"User-Agent": _UA, "Accept": "text/plain"},
                 timeout=30,
             )
-            response.raise_for_status()
         except requests.RequestException as exc:
             return self.error_result(
                 "read",
@@ -112,7 +130,25 @@ class WebAdapter(BaseAdapter):
                 meta=self.make_meta(value=normalized, limit=limit, started_at=started_at),
             )
 
-        markdown = response.text
+        status_code = int(getattr(response, "status_code", 200) or 200)
+        markdown = getattr(response, "text", "")
+        if status_code >= 400:
+            code, message, details = _reader_error_details(status_code, reader_url, markdown)
+            return self.error_result(
+                "read",
+                code=code,
+                message=message,
+                raw=markdown or None,
+                meta=self.make_meta(
+                    value=normalized,
+                    limit=limit,
+                    started_at=started_at,
+                    reader_url=reader_url,
+                    reader_status_code=status_code,
+                ),
+                details=details,
+            )
+
         title, published_at, body = _extract_reader_metadata(markdown)
         hygiene_meta = _web_hygiene_meta(body)
         item = build_item(
@@ -125,7 +161,7 @@ class WebAdapter(BaseAdapter):
             published_at=published_at,
             source=self.channel,
             extras={
-                "reader_url": f"https://r.jina.ai/{normalized}",
+                "reader_url": reader_url,
                 "source_hints": web_source_hints(published_at),
             },
         )

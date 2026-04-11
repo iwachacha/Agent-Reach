@@ -61,3 +61,33 @@ def test_docs_folder_only_contains_supported_docs():
 
     assert required_docs <= names
     assert names <= allowed_docs
+
+
+def test_caller_control_policy_is_documented_consistently():
+    repo_root = _repo_root()
+    files = {
+        "readme": repo_root / "README.md",
+        "downstream": repo_root / "docs" / "downstream-usage.md",
+        "skill": repo_root / "agent_reach" / "skill" / "SKILL.md",
+        "agent_prompt": repo_root / "agent_reach" / "skill" / "agents" / "openai.yaml",
+    }
+
+    texts = {name: path.read_text(encoding="utf-8") for name, path in files.items()}
+
+    assert "Agent Reach does not choose" in texts["readme"]
+    assert "auto-escalate" in texts["readme"]
+    assert "explicit opt-in" in texts["readme"]
+    assert "--limit 20" in texts["readme"]
+
+    assert "The caller chooses scope" in texts["downstream"]
+    assert "auto-escalate" in texts["downstream"]
+    assert "explicit opt-in" in texts["downstream"]
+    assert "--limit 20" in texts["downstream"]
+
+    assert "The caller chooses" in texts["skill"]
+    assert "auto-escalate" in texts["skill"]
+    assert "explicit opt-in" in texts["skill"]
+    assert "--limit 20" in texts["skill"]
+
+    assert "does not choose scope" in texts["agent_prompt"]
+    assert "explicit opt-in" in texts["agent_prompt"]

@@ -185,6 +185,73 @@ def test_candidates_summary_only_omits_candidate_bodies(tmp_path):
     assert payload["candidates"] == []
 
 
+def test_candidates_summary_includes_channel_and_source_role_counts(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    exa_result = _result(
+        channel="exa_search",
+        operation="search",
+        items=[_item("exa-1", "https://example.com/post", "Post", source="exa_search")],
+        input_value="topic",
+    )
+    web_result = _result(
+        channel="web",
+        operation="read",
+        items=[_item("web-1", "https://example.com/post", "Post", source="web")],
+        input_value="https://example.com/post",
+    )
+    github_result = _result(
+        channel="github",
+        operation="read",
+        items=[_item("repo-1", None, "Repo", source="github")],
+        input_value="owner/repo",
+    )
+    _write_jsonl(
+        path,
+        [
+            build_ledger_record(
+                exa_result,
+                run_id="run-1",
+                intent="official_docs",
+                query_id="q01",
+                source_role="article_discovery",
+            ),
+            build_ledger_record(
+                web_result,
+                run_id="run-1",
+                intent="followup_read",
+                query_id="q02",
+                source_role="followup_read",
+            ),
+            build_ledger_record(
+                github_result,
+                run_id="run-1",
+                intent="oss_candidates",
+                query_id="q03",
+                source_role="repo_discovery",
+            ),
+        ],
+    )
+
+    payload = build_candidates_payload(path, by="url", limit=20, summary_only=True)
+
+    assert payload["summary"]["candidate_count"] == 2
+    assert payload["summary"]["channel_counts"] == {
+        "exa_search": 1,
+        "github": 1,
+        "web": 1,
+    }
+    assert payload["summary"]["source_role_counts"] == {
+        "article_discovery": 1,
+        "followup_read": 1,
+        "repo_discovery": 1,
+    }
+    assert payload["summary"]["intent_counts"] == {
+        "followup_read": 1,
+        "official_docs": 1,
+        "oss_candidates": 1,
+    }
+
+
 def test_candidates_fields_filter_and_relevance_metadata(tmp_path):
     path = tmp_path / "evidence.jsonl"
     result = _result(items=[_item("1", "https://example.com/1", "One")])

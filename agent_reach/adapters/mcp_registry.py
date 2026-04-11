@@ -113,6 +113,47 @@ def _version_summary(entry: dict) -> dict:
     }
 
 
+def _compact_mapping(values: dict[str, object]) -> dict[str, object]:
+    return {key: value for key, value in values.items() if value not in (None, "", [], {})}
+
+
+def _raw_entry_summary(entry: dict) -> dict:
+    server = _server(entry)
+    official = _official_meta(entry)
+    raw_repository = server.get("repository")
+    repository = raw_repository if isinstance(raw_repository, dict) else {}
+    summary = {
+        "server": _compact_mapping(
+            {
+                "name": server.get("name"),
+                "description": server.get("description"),
+                "version": server.get("version"),
+                "repository": _compact_mapping(
+                    {
+                        "url": repository.get("url"),
+                        "source": repository.get("source"),
+                    }
+                ),
+                "websiteUrl": server.get("websiteUrl") or server.get("website_url"),
+                "iconUrl": server.get("iconUrl") or server.get("icon_url") or server.get("icon"),
+                "remotes": _remote_urls(server),
+            }
+        ),
+    }
+    official_summary = _compact_mapping(
+        {
+            "status": official.get("status"),
+            "publishedAt": official.get("publishedAt") or official.get("published_at"),
+            "updatedAt": official.get("updatedAt") or official.get("updated_at"),
+            "statusChangedAt": official.get("statusChangedAt") or official.get("status_changed_at"),
+            "isLatest": official.get("isLatest"),
+        }
+    )
+    if official_summary:
+        summary["_meta"] = {"io.modelcontextprotocol.registry/official": official_summary}
+    return summary
+
+
 def _entry_item(
     entry: dict,
     idx: int,
@@ -306,17 +347,33 @@ class MCPRegistryAdapter(BaseAdapter):
                     meta=self.make_meta(value=query, limit=limit, started_at=started_at),
                 )
 
-            raw_pages.append(page)
             pages_fetched += 1
+            matched_entries: list[dict] = []
             for entry in page["servers"]:
                 if isinstance(entry, dict) and _matches_query(entry, query):
                     entries.append(entry)
+                    matched_entries.append(_raw_entry_summary(entry))
                     name = _entry_name(entry) or f"mcp-server-{len(entries) - 1}"
                     unique_names.add(name)
                     if len(unique_names) >= limit:
                         break
             raw_metadata = page.get("metadata")
             metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
+            raw_pages.append(
+                _compact_mapping(
+                    {
+                        "server_count": len(page["servers"]),
+                        "matched_count": len(matched_entries),
+                        "matched_entries": matched_entries,
+                        "metadata": _compact_mapping(
+                            {
+                                "count": metadata.get("count"),
+                                "nextCursor": metadata.get("nextCursor") or metadata.get("next_cursor"),
+                            }
+                        ),
+                    }
+                )
+            )
             cursor = metadata.get("nextCursor") or metadata.get("next_cursor")
             if not cursor:
                 break
@@ -329,7 +386,12 @@ class MCPRegistryAdapter(BaseAdapter):
         return self.ok_result(
             "search",
             items=items,
-            raw={"pages": raw_pages},
+            raw={
+                "pages": raw_pages,
+                "matched_count": len(entries),
+                "retained_count": len(items),
+                "duplicates_removed": duplicates_removed,
+            },
             meta=self.make_meta(
                 value=query,
                 limit=limit,
@@ -412,7 +474,7 @@ class MCPRegistryAdapter(BaseAdapter):
         return self.ok_result(
             "read",
             items=[item],
-            raw=raw,
+            raw=_raw_entry_summary(raw),
             meta=self.make_meta(
                 value=server_name,
                 limit=limit,

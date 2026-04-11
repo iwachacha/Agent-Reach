@@ -114,6 +114,12 @@ def test_export_points_at_existing_checkout_artifacts():
     assert payload["external_project_usage"]["preferred_interface"] == "agent-reach collect --json"
     assert payload["codex_runtime_policy"]["default_interface"] == "agent-reach collect --json"
     assert "Do not copy" in payload["codex_runtime_policy"]["no_copy_rule"]
+    request_scale_policy = payload["codex_runtime_policy"]["request_scale_policy"]
+    assert request_scale_policy["single_collect"]["pattern"] == "single normalized collect or read"
+    assert request_scale_policy["bounded_multi_source"]["pattern"] == "caller-chosen small multi-source collection"
+    assert request_scale_policy["large_scale_research"]["explicit_opt_in"] is True
+    assert any("does not choose request scale" in item for item in request_scale_policy["rules"])
+    assert any("default `--limit 20`" in item for item in request_scale_policy["rules"])
     assert payload["codex_runtime_policy"]["large_scale_research"]["pattern"] == "bounded fan-out with normalized JSON handoff"
     assert any("hacker_news" in command for command in payload["verification_commands"])
     assert any("mcp_registry" in command for command in payload["verification_commands"])
@@ -146,9 +152,12 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
     assert any("ledger validate" in item for item in payload["documentation_summary"])
     assert any("core exit policy" in item for item in payload["documentation_summary"])
     assert any("YouTube collection exposes" in item for item in payload["documentation_summary"])
+    assert any("probe_attention" in item for item in payload["documentation_summary"])
+    assert any("validate-only" in item for item in payload["documentation_summary"])
     assert payload["inline_payload_notes"]
     assert payload["external_project_usage"]["github_actions"]["uses"].startswith("iwachacha/Agent-Reach/")
     assert any("agent-reach[crawl4ai]" in note for note in payload["external_project_usage"]["github_actions"]["notes"])
     assert payload["codex_runtime_policy"]["large_scale_research"]["recommended_limits"]["discovery"] == 10
     assert any("blocking_not_ready" in item for item in payload["codex_runtime_policy"]["decision_order"])
+    assert any("probe_attention" in item for item in payload["codex_runtime_policy"]["decision_order"])
     assert any("authenticated-but-unprobed" in item for item in payload["codex_runtime_policy"]["failure_policy"])

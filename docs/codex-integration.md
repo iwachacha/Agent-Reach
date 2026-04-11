@@ -6,7 +6,7 @@ Agent Reach is a Windows-first integration layer for research tooling. It now ex
 
 - a stable channel registry through `agent-reach channels --json`
 - per-operation option contracts through `channels --json` `operation_contracts`, so downstream code can choose pagination and time-window inputs itself
-- readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses`, `probed_operations`, and `probe_run_coverage` for downstream routing
+- readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses`, `probed_operations`, `probe_run_coverage`, and `summary.probe_attention` for downstream routing
 - a thin read-only collector through `agent-reach collect --json`
 - ledger validation and append helpers through `agent-reach ledger validate --json` and `agent-reach ledger append --json`
 - a non-mutating Codex export through `agent-reach export-integration --client codex`
@@ -23,7 +23,7 @@ agent-reach collect --channel github --operation read --input "openai/openai-pyt
 agent-reach export-integration --client codex --format json
 ```
 
-`doctor --json` defaults to `--exit-policy core`: tier 0 channel failures affect the exit code, while optional gaps are reported under `summary.advisory_not_ready`. Use `--exit-policy all` for strict all-channel readiness.
+`doctor --json` defaults to `--exit-policy core`: tier 0 channel failures affect the exit code, while optional gaps are reported under `summary.advisory_not_ready`. Inspect `summary.probe_attention` when a channel supports only partial probe coverage or a probe run left operations unprobed. Use `--exit-policy all` for strict all-channel readiness.
 
 ## No-Copy External Project Mode
 
@@ -37,7 +37,7 @@ agent-reach doctor --json --probe
 
 After that, Codex can call `agent-reach collect --json` from any working directory. The downstream project does not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files unless it explicitly wants repo-local plugin artifacts.
 
-`export-integration --format json` also includes `codex_runtime_policy`, which is the machine-readable version of this rule set. Downstream setup tools should prefer `agent-reach collect --json` and should not vendor Agent Reach files by default.
+`export-integration --format json` also includes `codex_runtime_policy`, which is the machine-readable version of this rule set. Downstream setup tools should prefer `agent-reach collect --json`, should not vendor Agent Reach files by default, and should treat large-scale research as explicit opt-in rather than auto-escalating lightweight asks.
 
 ## Repo artifacts
 

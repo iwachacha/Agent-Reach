@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from agent_reach import __version__
-from agent_reach.batch import BatchPlanError, render_batch_text, run_batch_plan
+from agent_reach.batch import BatchPlanError, render_batch_text, run_batch_plan, validate_batch_plan
 from agent_reach.candidates import (
     CandidatePlanError,
     build_candidates_payload,
@@ -243,7 +243,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated candidate fields to include in output",
     )
 
-    p_scout = sub.add_parser("scout", help="Build a plan-only capability snapshot")
+    p_scout = sub.add_parser("scout", help="Build an opt-in plan-only capability snapshot")
     p_scout.add_argument("--topic", required=True, help="Topic echo for the calling workflow")
     p_scout.add_argument("--budget", choices=BUDGETS, default="auto", help="Research budget hint")
     p_scout.add_argument(
@@ -260,11 +260,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_scout.add_argument("--json", action="store_true", help="Print machine-readable scout output")
 
-    p_batch = sub.add_parser("batch", help="Run a bounded batch collection plan")
+    p_batch = sub.add_parser("batch", help="Run or validate a bounded batch collection plan")
     p_batch.add_argument("--plan", required=True, help="Research plan JSON path")
-    batch_save_group = p_batch.add_mutually_exclusive_group(required=True)
+    batch_save_group = p_batch.add_mutually_exclusive_group()
     batch_save_group.add_argument("--save", help="Evidence ledger JSONL output path")
     batch_save_group.add_argument("--save-dir", help="Directory for sharded evidence ledger JSONL outputs")
+    p_batch.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Validate the plan and print a non-mutating summary without collecting or writing ledger data",
+    )
     p_batch.add_argument(
         "--shard-by",
         choices=["channel", "operation", "channel-operation"],
@@ -1202,6 +1207,26 @@ def _candidate_error_payload(args, message: str) -> dict:
     }
 
 
+def _batch_error_payload(args, message: str) -> dict:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": utc_timestamp(),
+        "command": "batch",
+        "validate_only": bool(args.validate_only),
+        "valid": False,
+        "plan": args.plan,
+        "save": args.save,
+        "save_dir": args.save_dir,
+        "failure_policy": None,
+        "quality_profile": args.quality,
+        "summary": None,
+        "error": {
+            "code": "batch_plan_error",
+            "message": message,
+        },
+    }
+
+
 def _cmd_scout(args) -> int:
     if not args.plan_only:
         print("scout currently requires --plan-only", file=sys.stderr)
@@ -1226,6 +1251,29 @@ def _cmd_scout(args) -> int:
 def _cmd_batch(args) -> int:
     if args.shard_by and not args.save_dir:
         print("shard-by is only supported with --save-dir", file=sys.stderr)
+        return 2
+    if args.validate_only:
+        if args.resume:
+            print("resume is not supported with --validate-only", file=sys.stderr)
+            return 2
+        try:
+            payload = validate_batch_plan(
+                args.plan,
+                quality=args.quality,
+            )
+        except BatchPlanError as exc:
+            if args.json:
+                _print_json(_batch_error_payload(args, str(exc)))
+            else:
+                print(f"Could not validate batch plan: {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            _print_json(payload)
+        else:
+            print(render_batch_text(payload))
+        return 0
+    if not args.save and not args.save_dir:
+        print("batch requires --save or --save-dir unless --validate-only is set", file=sys.stderr)
         return 2
     try:
         payload, exit_code = run_batch_plan(

@@ -77,6 +77,9 @@ def build_candidates_payload(
     by_key: dict[str, dict[str, Any]] = {}
     items_seen = 0
     skipped_items = 0
+    channel_keys: dict[str, set[str]] = {}
+    source_role_keys: dict[str, set[str]] = {}
+    intent_keys: dict[str, set[str]] = {}
 
     for record in records:
         result = record["result"]
@@ -93,6 +96,10 @@ def build_candidates_payload(
             intent = _metadata_value(record, result, item, "intent")
             query_id = _metadata_value(record, result, item, "query_id")
             source_role = _metadata_value(record, result, item, "source_role")
+            source = item.get("source") or result.get("channel")
+            _track_summary_key(channel_keys, source, key)
+            _track_summary_key(source_role_keys, source_role, key)
+            _track_summary_key(intent_keys, intent, key)
 
             sighting = {
                 "run_id": record.get("run_id"),
@@ -141,6 +148,9 @@ def build_candidates_payload(
             "skipped_items": skipped_items,
             "candidate_count": len(candidates),
             "returned": len(returned),
+            "channel_counts": _count_summary_keys(channel_keys),
+            "source_role_counts": _count_summary_keys(source_role_keys),
+            "intent_counts": _count_summary_keys(intent_keys),
         },
         "candidates": output_candidates,
     }
@@ -161,6 +171,10 @@ def render_candidates_text(payload: dict[str, Any]) -> str:
         lines.append(f"Skipped records: {summary['skipped_records']}")
     if summary.get("skipped_items"):
         lines.append(f"Skipped items: {summary['skipped_items']}")
+    if summary.get("channel_counts"):
+        lines.append(f"Channels: {_render_count_summary(summary['channel_counts'])}")
+    if summary.get("source_role_counts"):
+        lines.append(f"Source roles: {_render_count_summary(summary['source_role_counts'])}")
     for candidate in payload["candidates"]:
         title = candidate.get("title") or candidate.get("id") or "(untitled)"
         url = candidate.get("url") or ""
@@ -268,6 +282,24 @@ def _metadata_value(
 def _add_if_present(target: dict[str, Any], name: str, value: Any) -> None:
     if value is not None:
         target[name] = value
+
+
+def _track_summary_key(summary: dict[str, set[str]], name: Any, key: str) -> None:
+    if name is None:
+        return
+    label = str(name).strip()
+    if not label:
+        return
+    summary.setdefault(label, set()).add(key)
+
+
+def _count_summary_keys(summary: dict[str, set[str]]) -> dict[str, int]:
+    ordered = sorted(summary.items(), key=lambda item: (-len(item[1]), item[0]))
+    return {name: len(keys) for name, keys in ordered}
+
+
+def _render_count_summary(summary: dict[str, int]) -> str:
+    return ", ".join(f"{name}={count}" for name, count in summary.items())
 
 
 def _fill_missing_candidate_metadata(

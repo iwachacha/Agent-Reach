@@ -37,6 +37,14 @@ uv tool install --force .
 agent-reach version
 ```
 
+After pushing a specific remote ref and wanting that exact build globally, refresh with:
+
+```powershell
+uv tool install --force git+<remote-url>@<ref>
+agent-reach skill --install
+agent-reach version
+```
+
 Preview the Windows commands without changing anything:
 
 ```powershell
@@ -116,6 +124,15 @@ For larger research runs, use bounded fan-out: start with a few small `exa_searc
 Agent Reach normalizes results into `items`, keeps the backend-native payload in `raw`, and never prompts interactively during collection.
 
 Reusable examples live under `examples/` and `.github/workflows/agent-reach-smoke.yml`. They collect raw JSON/JSONL and candidate artifacts for downstream automation; they do not own Discord posting, ranking, scheduling, or project state.
+
+## Caller-Control Policy
+
+- Agent Reach does not choose investigation scope, routes, source mix, ranking, summarization, or posting.
+- The caller chooses scope. Keep lightweight asks lightweight instead of trying to auto-escalate them into large-scale research.
+- `agent-reach collect --json` is the default thin interface for downstream collection.
+- `batch` and `scout` are explicit opt-in helpers. They are not the default route for everyday collection.
+- `agent-reach plan candidates` keeps its default `--limit 20`; raise it only when the caller explicitly wants a wider candidate review set.
+- Large-scale research is explicit opt-in. When a saved batch plan is involved, run `agent-reach batch --plan PLAN.json --validate-only --json` before the write-producing batch execution.
 
 ## Guides
 

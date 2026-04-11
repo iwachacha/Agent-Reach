@@ -165,6 +165,10 @@ def test_format_report_groups_core_and_optional():
                 "message": "not authenticated",
                 "tier": 1,
                 "backends": ["twitter-cli"],
+                "supports_probe": True,
+                "probe_coverage": "partial",
+                "probe_run_coverage": "not_run",
+                "unprobed_operations": ["search", "user", "user_posts", "tweet"],
             },
         }
     )
@@ -176,6 +180,8 @@ def test_format_report_groups_core_and_optional():
     assert "Summary: 1/3 channels ready" in plain
     assert "Not ready: Cross-web search via Exa" in plain
     assert "Advisory only: Twitter/X search and timeline access" in plain
+    assert "Probe attention:" in plain
+    assert "user_posts, tweet" in plain
 
 
 def test_doctor_payload_and_exit_code():
@@ -198,8 +204,63 @@ def test_doctor_payload_and_exit_code():
     assert payload["summary"]["exit_code"] == 1
     assert payload["summary"]["blocking_not_ready"] == ["github"]
     assert payload["summary"]["advisory_not_ready"] == []
+    assert payload["summary"]["probe_attention"] == []
     assert payload["channels"][0]["name"] == "web"
     assert doctor.doctor_exit_code(results) == 1
+
+
+def test_doctor_summary_includes_probe_attention_for_partial_contract():
+    results = {
+        "twitter": {
+            "name": "twitter",
+            "description": "Twitter/X search and timeline access",
+            "status": "warn",
+            "message": "authenticated but not fully probed",
+            "tier": 1,
+            "supports_probe": True,
+            "probe_coverage": "partial",
+            "probe_run_coverage": "not_run",
+            "unprobed_operations": ["search", "user", "user_posts", "tweet"],
+        }
+    }
+
+    payload = doctor.make_doctor_payload(results)
+
+    assert payload["summary"]["probe_attention"] == [
+        {
+            "name": "twitter",
+            "probe_coverage": "partial",
+            "probe_run_coverage": "not_run",
+            "unprobed_operations": ["search", "user", "user_posts", "tweet"],
+        }
+    ]
+
+
+def test_doctor_summary_includes_probe_attention_for_partial_probe_run():
+    results = {
+        "github": {
+            "name": "github",
+            "description": "GitHub repositories and code search",
+            "status": "ok",
+            "message": "ready",
+            "tier": 0,
+            "supports_probe": True,
+            "probe_coverage": "full",
+            "probe_run_coverage": "partial",
+            "unprobed_operations": ["search"],
+        }
+    }
+
+    payload = doctor.make_doctor_payload(results, probe=True)
+
+    assert payload["summary"]["probe_attention"] == [
+        {
+            "name": "github",
+            "probe_coverage": "full",
+            "probe_run_coverage": "partial",
+            "unprobed_operations": ["search"],
+        }
+    ]
 
 
 def test_doctor_exit_policy_core_ignores_optional_setup_gaps():

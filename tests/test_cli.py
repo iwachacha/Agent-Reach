@@ -1254,6 +1254,190 @@ class TestCLI:
         assert len(records) == 2
         assert records[1]["query_id"] == "q02"
 
+    def test_batch_accepts_utf8_sig_plan(self, capsys, monkeypatch, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        ledger_path = tmp_path / "evidence.jsonl"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "queries": [
+                        {
+                            "channel": "web",
+                            "operation": "read",
+                            "input": "https://example.com",
+                            "limit": 1,
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8-sig",
+        )
+
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": "1", "title": "Example", "url": value}],
+                    "raw": None,
+                    "meta": {"input": value, "limit": limit, "count": 1},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.batch.AgentReachClient", _FakeClient)
+
+        assert (
+            main(
+                [
+                    "batch",
+                    "--plan",
+                    str(plan_path),
+                    "--save",
+                    str(ledger_path),
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["summary"]["ok"] == 1
+        assert payload["queries"][0]["status"] == "ok"
+
+    def test_batch_requires_save_or_validate_only(self, capsys, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "queries": [
+                        {
+                            "channel": "web",
+                            "operation": "read",
+                            "input": "https://example.com",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        assert main(["batch", "--plan", str(plan_path), "--json"]) == 2
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "batch requires --save or --save-dir unless --validate-only is set" in captured.err
+
+    def test_batch_validate_only_accepts_utf8_sig_plan_without_writes(self, capsys, monkeypatch, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        ledger_path = tmp_path / "evidence.jsonl"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "quality_profile": "coverage",
+                    "failure_policy": "strict",
+                    "queries": [
+                        {
+                            "channel": "web",
+                            "operation": "read",
+                            "input": "https://example.com",
+                            "intent": "official_docs",
+                            "source_role": "primary",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8-sig",
+        )
+
+        class _UnexpectedClient:
+            def __init__(self, *args, **kwargs):
+                raise AssertionError("validate-only should not instantiate AgentReachClient")
+
+        monkeypatch.setattr("agent_reach.batch.AgentReachClient", _UnexpectedClient)
+
+        assert (
+            main(
+                [
+                    "batch",
+                    "--plan",
+                    str(plan_path),
+                    "--save",
+                    str(ledger_path),
+                    "--validate-only",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["validate_only"] is True
+        assert payload["valid"] is True
+        assert payload["failure_policy"] == "strict"
+        assert payload["quality_profile"] == "coverage"
+        assert payload["summary"]["query_count"] == 1
+        assert payload["summary"]["channel_counts"] == {"web": 1}
+        assert payload["summary"]["operation_counts"] == {"read": 1}
+        assert payload["summary"]["intent_counts"] == {"official_docs": 1}
+        assert payload["summary"]["source_role_counts"] == {"primary": 1}
+        assert not ledger_path.exists()
+
+    def test_batch_validate_only_reports_invalid_option_in_json(self, capsys, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "queries": [
+                        {
+                            "channel": "web",
+                            "operation": "read",
+                            "input": "https://example.com",
+                            "body_mode": "snippet",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        assert main(["batch", "--plan", str(plan_path), "--validate-only", "--json"]) == 2
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["validate_only"] is True
+        assert payload["valid"] is False
+        assert payload["error"]["code"] == "batch_plan_error"
+        assert "body_mode" in payload["error"]["message"]
+
+    def test_batch_validate_only_reports_missing_field_in_json(self, capsys, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "queries": [
+                        {
+                            "channel": "web",
+                            "operation": "read",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        assert main(["batch", "--plan", str(plan_path), "--validate-only", "--json"]) == 2
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["validate_only"] is True
+        assert payload["valid"] is False
+        assert "missing required field" in payload["error"]["message"]
+
+    def test_batch_validate_only_reports_invalid_json_in_json(self, capsys, tmp_path):
+        plan_path = tmp_path / "plan.json"
+        plan_path.write_text('{"queries":[', encoding="utf-8")
+
+        assert main(["batch", "--plan", str(plan_path), "--validate-only", "--json"]) == 2
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["validate_only"] is True
+        assert payload["valid"] is False
+        assert payload["error"]["code"] == "batch_plan_error"
+        assert "Invalid batch plan JSON" in payload["error"]["message"]
+
     def test_batch_save_dir_writes_shards(self, capsys, monkeypatch, tmp_path):
         plan_path = tmp_path / "plan.json"
         save_dir = tmp_path / "ledger"
