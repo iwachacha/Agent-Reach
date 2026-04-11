@@ -4,6 +4,17 @@ All notable changes to this fork are documented here.
 
 ## Unreleased
 
+## [1.11.0] - 2026-04-12
+
+### Added
+
+- bundled maintainer-only proposal-shaping skill `agent-reach-propose-improvements` for turning external research into policy-compatible Agent Reach improvement shortlists
+- handoff guidance that separates proposal generation, maintainer review, and approved-change shipping into distinct skill stages
+
+### Changed
+
+- expanded bundled skill metadata and docs so the maintainer workflow now covers proposal shaping, proposal review, and release handling as separate responsibilities
+
 ## [1.10.0] - 2026-04-12
 
 ### Added

@@ -117,6 +117,7 @@ def test_export_points_at_existing_checkout_artifacts():
         "agent-reach",
         "agent-reach-shape-brief",
         "agent-reach-orchestrate",
+        "agent-reach-propose-improvements",
         "agent-reach-maintain-proposals",
         "agent-reach-maintain-release",
     ]
@@ -164,6 +165,7 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
         "agent-reach",
         "agent-reach-shape-brief",
         "agent-reach-orchestrate",
+        "agent-reach-propose-improvements",
         "agent-reach-maintain-proposals",
         "agent-reach-maintain-release",
     ]

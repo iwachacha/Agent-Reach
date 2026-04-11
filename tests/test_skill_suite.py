@@ -106,6 +106,24 @@ def test_maintainer_review_skill_has_policy_and_output_contract():
     assert "Implementation Handoff" in output
 
 
+def test_improvement_proposal_skill_has_shaping_and_handoff_rules():
+    skill = (_skill_dir("agent-reach-propose-improvements") / "SKILL.md").read_text(encoding="utf-8")
+    shaping = (_skill_dir("agent-reach-propose-improvements") / "references" / "proposal-shaping.md").read_text(
+        encoding="utf-8"
+    )
+    handoff = (_skill_dir("agent-reach-propose-improvements") / "references" / "handoff.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Do not start implementation from this skill." in skill
+    assert "suggested_decision" in skill
+    assert "Proposal Shapes To Avoid" in shaping
+    assert "Split Rule" in shaping
+    assert "Recommended Sequence" in handoff
+    assert "agent-reach-maintain-proposals" in handoff
+    assert "agent-reach-maintain-release" in handoff
+
+
 def test_maintainer_release_skill_has_shipping_guardrails():
     skill = (_skill_dir("agent-reach-maintain-release") / "SKILL.md").read_text(encoding="utf-8")
     boundaries = (_skill_dir("agent-reach-maintain-release") / "references" / "change-boundaries.md").read_text(

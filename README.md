@@ -14,6 +14,7 @@ It also ships a bundled Codex skill suite for collection, orchestration, and mai
 - `agent-reach`: diagnostics, channel discovery, and read-only collection guidance
 - `agent-reach-shape-brief`: turn rough research asks into a fixed brief
 - `agent-reach-orchestrate`: take a rough ask, optionally use one intake subagent when it is actually worth it, and start the Agent Reach investigation in-session
+- `agent-reach-propose-improvements`: maintainer-only skill for turning external research into clean, policy-compatible improvement proposals
 - `agent-reach-maintain-proposals`: maintainer-only review skill for adopting or rejecting Agent Reach improvement proposals before editing
 - `agent-reach-maintain-release`: maintainer-only shipping skill for approved Agent Reach changes, including push and reinstall flows when requested
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Reach Propose Improvements"
+  short_description: "Shape research into clean agent-reach proposals"
+  default_prompt: "Use $agent-reach-propose-improvements to turn this external research or friction report into a short list of policy-compatible Agent Reach improvement proposals."

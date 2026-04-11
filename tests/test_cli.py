@@ -2101,6 +2101,7 @@ class TestCLI:
             "agent-reach",
             "agent-reach-shape-brief",
             "agent-reach-orchestrate",
+            "agent-reach-propose-improvements",
             "agent-reach-maintain-proposals",
             "agent-reach-maintain-release",
         ]
