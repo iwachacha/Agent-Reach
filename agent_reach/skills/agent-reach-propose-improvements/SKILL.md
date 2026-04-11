@@ -1,6 +1,6 @@
 ---
 name: agent-reach-propose-improvements
-description: Generate policy-compatible improvement proposals for Agent Reach from external research, friction logs, or other AI-generated findings. Use when Codex should turn research artifacts into a small, clean shortlist of thin-interface proposals that preserve caller control, then hand the shortlist to maintainer review instead of editing immediately.
+description: Generate policy-compatible improvement proposals for Agent Reach from external research, friction logs, or other AI-generated findings. Use when Codex should compress raw findings into a short shortlist before formal adopt/reject review; if the user already has a concrete proposal list and wants the decision now, use `agent-reach-maintain-proposals`.
 ---
 
 # Agent Reach Propose Improvements
@@ -21,6 +21,7 @@ Turn external findings into clean candidate proposals for Agent Reach itself.
 - Prefer extending an existing surface over inventing a parallel command or workflow.
 - Split a good primitive away from any hidden policy layer.
 - Self-reject auto-routing, auto-ranking, hidden deep-read, impact scoring, or fake uniformity proposals.
+- If the user already pasted a concrete proposal list and asked for adopt/reject/defer judgment, do not reshape it again here; hand it to `agent-reach-maintain-proposals`.
 - Keep the output short. A strong shortlist is better than a long idea dump.
 - Do not start implementation from this skill.
 

@@ -78,7 +78,14 @@ def _twitter_media_references(media: object) -> list[dict[str, object]]:
     return dedupe_media_references(references)
 
 
-def _tweet_item(tweet: dict, idx: int, source: str) -> NormalizedItem:
+def _tweet_item(
+    tweet: dict,
+    idx: int,
+    source: str,
+    *,
+    engagement_complete: bool,
+    media_complete: bool,
+) -> NormalizedItem:
     media = tweet.get("media") or []
     return build_item(
         item_id=str(tweet.get("id") or f"tweet-{idx}"),
@@ -101,6 +108,8 @@ def _tweet_item(tweet: dict, idx: int, source: str) -> NormalizedItem:
             "retweeted_by": tweet.get("retweetedBy"),
             "quoted_tweet": tweet.get("quotedTweet"),
             "score": tweet.get("score"),
+            "engagement_complete": engagement_complete,
+            "media_complete": media_complete,
         },
     )
 
@@ -218,7 +227,16 @@ class TwitterAdapter(BaseAdapter):
 
         raw, _raw_output = result
         data = raw.get("data", [])
-        items = [_tweet_item(tweet, idx, self.channel) for idx, tweet in enumerate(data)]
+        items = [
+            _tweet_item(
+                tweet,
+                idx,
+                self.channel,
+                engagement_complete=False,
+                media_complete=False,
+            )
+            for idx, tweet in enumerate(data)
+        ]
         return self.ok_result(
             "search",
             items=items,
@@ -313,7 +331,16 @@ class TwitterAdapter(BaseAdapter):
 
         raw, _raw_output = result
         data = raw.get("data", [])
-        items = [_tweet_item(tweet, idx, self.channel) for idx, tweet in enumerate(data)]
+        items = [
+            _tweet_item(
+                tweet,
+                idx,
+                self.channel,
+                engagement_complete=False,
+                media_complete=False,
+            )
+            for idx, tweet in enumerate(data)
+        ]
         return self.ok_result(
             "user_posts",
             items=items,
@@ -347,7 +374,16 @@ class TwitterAdapter(BaseAdapter):
                 meta=self.make_meta(value=normalized, limit=limit, started_at=started_at),
             )
 
-        items = [_tweet_item(tweet, idx, self.channel) for idx, tweet in enumerate(data)]
+        items = [
+            _tweet_item(
+                tweet,
+                idx,
+                self.channel,
+                engagement_complete=True,
+                media_complete=True,
+            )
+            for idx, tweet in enumerate(data)
+        ]
         return self.ok_result(
             "tweet",
             items=items,

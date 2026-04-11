@@ -14,8 +14,8 @@ It also ships a bundled Codex skill suite for collection, orchestration, and mai
 - `agent-reach`: diagnostics, channel discovery, and read-only collection guidance
 - `agent-reach-shape-brief`: turn rough research asks into a fixed brief
 - `agent-reach-orchestrate`: take a rough ask, optionally use one intake subagent when it is actually worth it, and start the Agent Reach investigation in-session
-- `agent-reach-propose-improvements`: maintainer-only skill for turning external research into clean, policy-compatible improvement proposals
-- `agent-reach-maintain-proposals`: maintainer-only review skill for adopting or rejecting Agent Reach improvement proposals before editing
+- `agent-reach-propose-improvements`: maintainer-only skill for turning raw external findings into a clean, policy-compatible shortlist before formal review
+- `agent-reach-maintain-proposals`: maintainer-only review skill for deciding adopt/reject/defer on a concrete Agent Reach proposal list before editing
 - `agent-reach-maintain-release`: maintainer-only shipping skill for approved Agent Reach changes, including push and exact-ref reinstall flows
 
 For most rough research asks, start with `agent-reach-orchestrate`. Use `agent-reach-shape-brief` only when you explicitly want to stop at brief formation before collection.
@@ -78,6 +78,7 @@ agent-reach version
 - `agent-reach collect --channel <name> --operation <op> --input <value> --json`
 - `agent-reach schema collection-result --json`
 - `agent-reach plan candidates --input .agent-reach/evidence.jsonl --json`
+- `agent-reach ledger merge --input .agent-reach/shards --output .agent-reach/evidence.jsonl --json`
 - `agent-reach ledger validate --input .agent-reach/evidence.jsonl --json`
 - `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json`
 - `agent-reach ledger query --input .agent-reach/evidence.jsonl --filter "channel == github" --json`
@@ -111,7 +112,9 @@ agent-reach ledger query --input .agent-reach/evidence.jsonl --filter "channel =
 agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json
 ```
 
-Collection output includes top-level `schema_version` and `agent_reach_version`. Normalized items expose common raw signals such as `canonical_url`, `source_item_id`, `engagement`, `media_references`, and neutral `identifiers` when the source provides them. Page-like reads also expose diagnostic extraction hygiene such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning`. `error.category` gives a stable cross-channel taxonomy while `error.code` preserves the source-specific or contract-specific detail. These are diagnostics only, not ranking or publishing policy.
+For parallel or per-command shard-first collection, prefer `agent-reach collect ... --save-dir .agent-reach/shards` and merge with `agent-reach ledger merge --input .agent-reach/shards --output .agent-reach/evidence.jsonl --json` before `ledger summarize`, `ledger query`, or `plan candidates`.
+
+Collection output includes top-level `schema_version` and `agent_reach_version`. Normalized items expose common raw signals such as `canonical_url`, `source_item_id`, `engagement`, `media_references`, and neutral `identifiers` when the source provides them. Twitter/X post items may also expose `extras.engagement_complete` and `extras.media_complete` as operation completeness hints. Page-like reads also expose diagnostic extraction hygiene such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning`. `error.category` gives a stable cross-channel taxonomy while `error.code` preserves the source-specific or contract-specific detail. These are diagnostics only, not ranking or publishing policy.
 
 Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` only when the caller wants smaller JSON artifacts. The default remains full raw payload retention.
 

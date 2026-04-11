@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from agent_reach.adapters.searxng import SearXNGAdapter
+from agent_reach.config import is_placeholder_searxng_base_url
 
 from .base import Channel
 
@@ -31,13 +32,30 @@ class SearXNGChannel(Channel):
         return False
 
     def check(self, config=None):
+        status, message, _extra = self.check_detailed(config)
+        return status, message
+
+    def check_detailed(self, config=None):
         base_url = config.get("searxng_base_url") if config else None
         if not base_url:
             return (
                 "off",
                 "SearXNG base URL is not configured. Run agent-reach configure searxng-base-url <INSTANCE_URL>",
+                {},
             )
-        return "ok", f"Configured for SearXNG JSON search at {base_url}"
+        if is_placeholder_searxng_base_url(base_url):
+            return (
+                "warn",
+                (
+                    "SearXNG base URL looks like a placeholder example value. "
+                    "Replace it with a real SearXNG instance before depending on this channel."
+                ),
+                {
+                    "diagnostic_basis": "placeholder_config",
+                    "configured_base_url": base_url,
+                },
+            )
+        return "ok", f"Configured for SearXNG JSON search at {base_url}", {"configured_base_url": base_url}
 
     def probe(self, config=None):
         status, message = self.check(config)

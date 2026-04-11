@@ -30,6 +30,7 @@ from agent_reach.ledger import (
     merge_ledger_inputs,
     query_ledger_input,
     save_collection_result,
+    save_collection_result_execution_shard,
     summarize_ledger_input,
     validate_ledger_input,
 )
@@ -195,9 +196,14 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Replace raw with a preview summary when its UTF-8 JSON size exceeds N bytes",
     )
-    p_collect.add_argument(
+    collect_save_group = p_collect.add_mutually_exclusive_group()
+    collect_save_group.add_argument(
         "--save",
         help="Append the raw CollectionResult envelope to an evidence ledger JSONL file",
+    )
+    collect_save_group.add_argument(
+        "--save-dir",
+        help="Write one JSONL shard per collect execution; merge later with ledger merge",
     )
     p_collect.add_argument(
         "--run-id",
@@ -205,15 +211,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_collect.add_argument(
         "--intent",
-        help="Optional evidence ledger intent label. Requires --save",
+        help="Optional evidence ledger intent label. Requires --save or --save-dir",
     )
     p_collect.add_argument(
         "--query-id",
-        help="Optional evidence ledger query ID. Requires --save",
+        help="Optional evidence ledger query ID. Requires --save or --save-dir",
     )
     p_collect.add_argument(
         "--source-role",
-        help="Optional evidence ledger source role label. Requires --save",
+        help="Optional evidence ledger source role label. Requires --save or --save-dir",
     )
     p_collect.add_argument(
         "--body-mode",
@@ -342,6 +348,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ledger_validate.add_argument("--json", action="store_true", help="Print machine-readable validation output")
     p_ledger_summarize = ledger_sub.add_parser("summarize", help="Summarize evidence ledger health counts")
     p_ledger_summarize.add_argument("--input", required=True, help="Ledger input file or directory")
+    p_ledger_summarize.add_argument(
+        "--filter",
+        action="append",
+        default=[],
+        help='Repeatable filter such as "intent == official_docs" or "source_role == web_search"',
+    )
     p_ledger_summarize.add_argument("--json", action="store_true", help="Print machine-readable summary output")
     p_ledger_query = ledger_sub.add_parser("query", help="Filter evidence ledger records")
     p_ledger_query.add_argument("--input", required=True, help="Ledger input file or directory")
@@ -1209,8 +1221,8 @@ def _cmd_collect(args) -> int:
         print("raw-max-bytes must be greater than or equal to 1", file=sys.stderr)
         return 2
     annotations = [args.intent, args.query_id, args.source_role]
-    if any(value is not None for value in annotations) and not args.save:
-        print("intent, query-id, and source-role require --save", file=sys.stderr)
+    if any(value is not None for value in annotations) and not (args.save or args.save_dir):
+        print("intent, query-id, and source-role require --save or --save-dir", file=sys.stderr)
         return 2
     if args.body_mode and (args.channel != "qiita" or args.operation != "search"):
         print("body-mode is only supported for qiita search", file=sys.stderr)
@@ -1253,18 +1265,30 @@ def _cmd_collect(args) -> int:
     else:
         print(_render_collect_text(payload, max_text_chars=args.max_text_chars))
 
-    if args.save:
+    if args.save or args.save_dir:
         _warn_missing_evidence_metadata(args.intent, args.query_id, args.source_role)
         try:
-            save_collection_result(
-                args.save,
-                payload,
-                run_id=args.run_id or default_run_id(),
-                input_value=args.input,
-                intent=args.intent,
-                query_id=args.query_id,
-                source_role=args.source_role,
-            )
+            run_id = args.run_id or default_run_id()
+            if args.save:
+                save_collection_result(
+                    args.save,
+                    payload,
+                    run_id=run_id,
+                    input_value=args.input,
+                    intent=args.intent,
+                    query_id=args.query_id,
+                    source_role=args.source_role,
+                )
+            else:
+                save_collection_result_execution_shard(
+                    args.save_dir,
+                    payload,
+                    run_id=run_id,
+                    input_value=args.input,
+                    intent=args.intent,
+                    query_id=args.query_id,
+                    source_role=args.source_role,
+                )
         except (OSError, TypeError, ValueError) as exc:
             print(f"Could not save evidence ledger: {exc}", file=sys.stderr)
             return 1
@@ -1293,7 +1317,7 @@ def _warn_missing_evidence_metadata(
     ]
     if missing:
         print(
-            "[WARN] --save used without evidence metadata: "
+            "[WARN] evidence ledger save used without evidence metadata: "
             f"{', '.join(missing)}. "
             "Use --intent, --query-id, and --source-role when downstream provenance matters.",
             file=sys.stderr,
@@ -1515,7 +1539,7 @@ def _cmd_ledger_validate(args) -> int:
 
 def _cmd_ledger_summarize(args) -> int:
     try:
-        payload = summarize_ledger_input(args.input)
+        payload = summarize_ledger_input(args.input, filters=list(args.filter or []))
     except (FileNotFoundError, OSError, ValueError) as exc:
         print(f"Could not summarize ledger: {exc}", file=sys.stderr)
         return 2
@@ -1528,7 +1552,9 @@ def _cmd_ledger_summarize(args) -> int:
                     "Agent Reach Ledger Summary",
                     "========================================",
                     f"Input: {payload['input']}",
+                    f"Filters: {', '.join(item['expression'] for item in payload['filters']) if payload['filters'] else 'none'}",
                     f"Records: {payload['records']}",
+                    f"Records scanned: {payload['records_scanned']}",
                     f"Collection results: {payload['collection_results']}",
                     f"Items seen: {payload['items_seen']}",
                     f"Errors: {payload['error_records']}",

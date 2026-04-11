@@ -1058,6 +1058,8 @@ def test_twitter_adapter_success(config, monkeypatch):
     assert payload["items"][0]["url"] == "https://x.com/OpenAI/status/123"
     assert payload["items"][0]["extras"]["metrics"] == {"likes": 10}
     assert payload["items"][0]["engagement"] == {"likes": 10}
+    assert payload["items"][0]["extras"]["engagement_complete"] is False
+    assert payload["items"][0]["extras"]["media_complete"] is False
     assert payload["meta"]["diagnostics"]["unbounded_time_window"] is True
     assert captured["command"][1:3] == ["search", "OpenAI"]
 
@@ -1198,6 +1200,8 @@ def test_twitter_adapter_user_posts_success(config, monkeypatch):
     assert payload["ok"] is True
     assert payload["operation"] == "user_posts"
     assert payload["items"][0]["extras"]["media"][0]["type"] == "photo"
+    assert payload["items"][0]["extras"]["engagement_complete"] is False
+    assert payload["items"][0]["extras"]["media_complete"] is False
     assert payload["items"][0]["extras"]["media_references"] == [
         {
             "type": "image",
@@ -1239,6 +1243,8 @@ def test_twitter_adapter_tweet_success(config, monkeypatch):
     assert payload["ok"] is True
     assert captured["command"][2] == "123"
     assert payload["items"][0]["url"] == "https://x.com/OpenAI/status/123"
+    assert payload["items"][0]["extras"]["engagement_complete"] is True
+    assert payload["items"][0]["extras"]["media_complete"] is True
 
 
 def test_twitter_adapter_not_authenticated(config, monkeypatch):

@@ -51,12 +51,15 @@ agent-reach collect --channel mcp_registry --operation search --input "docs mcp"
 
 Use the exact stable channel names from `agent-reach channels --json` in CLI commands, prompts, config files, and downstream handoffs. For example, use `exa_search`, `hatena_bookmark`, and `hacker_news`; do not shorten them to `exa`, `hatena`, or `hn`.
 
-When provenance matters, append each raw collection envelope to a JSONL ledger:
+When provenance matters, either append each raw collection envelope to one JSONL ledger or save one shard per command and merge later:
 
 ```powershell
 agent-reach collect --channel exa_search --operation search --input "latest AI agent frameworks" --limit 5 --json --save .agent-reach/evidence.jsonl --run-id agent-frameworks --intent discovery --query-id exa-agent-frameworks --source-role web_search
+agent-reach collect --channel exa_search --operation search --input "latest AI agent frameworks" --limit 5 --json --save-dir .agent-reach/shards --run-id agent-frameworks --intent discovery --query-id exa-agent-frameworks --source-role web_search
+agent-reach ledger merge --input .agent-reach/shards --output .agent-reach/evidence.jsonl --json
 agent-reach ledger validate --input .agent-reach/evidence.jsonl --require-metadata --json
 agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json
+agent-reach ledger summarize --input .agent-reach/evidence.jsonl --filter "source_role == web_search" --json
 agent-reach ledger query --input .agent-reach/evidence.jsonl --filter "channel == exa_search" --fields channel,query_id,source.file,result.items[*].url --json
 agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json
 ```
@@ -65,7 +68,7 @@ This does not require `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` file
 
 `agent-reach check-update --json` compares this fork to upstream `Panniantong/Agent-Reach` releases. Treat it as upstream awareness, not as the source of truth for the latest fork commit.
 
-Treat `extras.source_hints`, item-level `engagement`, `media_references`, neutral `identifiers`, `error.category`, and page extraction hygiene fields such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning` as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel controls such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach does not choose those inputs for the caller. Social search responses may set `meta.diagnostics.unbounded_time_window` so the caller can notice missing time bounds. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers. Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` when the caller wants smaller machine-readable artifacts.
+Treat `extras.source_hints`, item-level `engagement`, `media_references`, neutral `identifiers`, `extras.engagement_complete`, `extras.media_complete`, `error.category`, and page extraction hygiene fields such as `text_length`, `link_count`, `image_count`, `link_density`, and `extraction_warning` as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel controls such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach does not choose those inputs for the caller. Social search responses may set `meta.diagnostics.unbounded_time_window` so the caller can notice missing time bounds. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers. Use `--raw-mode minimal`, `--raw-mode none`, or `--raw-max-bytes N` when the caller wants smaller machine-readable artifacts.
 
 If a conditional command was captured without `--save`, append it later with:
 
@@ -89,10 +92,11 @@ When Codex is working inside an arbitrary project:
 - Use `agent-reach schema collection-result --json` when a downstream project wants a contract-testable JSON Schema.
 - Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel pagination or time-window options.
 - Keep CLI channel names and SDK helper aliases separate. `AgentReachClient` may expose convenience aliases, but downstream CLI configs and `collect` calls should still use stable channel names such as `exa_search`, `hatena_bookmark`, and `hacker_news`.
-- Add `--save .agent-reach/evidence.jsonl` when the run needs an auditable evidence trail.
+- Add `--save .agent-reach/evidence.jsonl` when the run needs one shared evidence ledger, or `--save-dir .agent-reach/shards` when parallel or per-command shard output is easier for the caller.
+- Merge sharded ledgers with `agent-reach ledger merge` before running `ledger summarize`, `ledger query`, or `plan candidates`.
 - Prefer `--run-id`, `--intent`, `--query-id`, and `--source-role` with saved ledgers; use `ledger validate --require-metadata --json` when metadata completeness should gate automation.
 - Validate ledgers with `agent-reach ledger validate --json` before treating them as CI artifacts.
-- Use `agent-reach ledger summarize --json` for channel, operation, intent, query, source-role, item, error, and metadata health counts.
+- Use `agent-reach ledger summarize --json` for channel, operation, intent, query, source-role, item, error, and metadata health counts, and add `--filter` when the caller wants a narrowed summary without leaving Agent Reach.
 - Use `agent-reach ledger query --json` for lightweight record filtering and field projection without leaving Agent Reach. Projection fields support array wildcards such as `result.items[*].url`.
 - Use `agent-reach plan candidates` for lightweight URL or ID dedupe before follow-up reads.
 - Keep `agent-reach plan candidates` at the default `--limit 20` unless the caller explicitly wants a broader candidate set.

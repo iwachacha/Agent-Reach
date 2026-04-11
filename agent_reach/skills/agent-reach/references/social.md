@@ -88,4 +88,6 @@ For account analysis, prefer these in order:
 
 Plain free-text `search "OpenAI"` may return related discussion rather than only `@OpenAI` posts.
 
+Twitter/X post items may expose `extras.engagement_complete` and `extras.media_complete`. Treat these as neutral completeness hints, not ranking signals. `search` is useful for discovery, while `tweet` is the safer follow-up when downstream code needs fuller post-level engagement or media context.
+
 When a channel exposes linked images, thumbnails, screenshots, avatars, or other lightweight media pointers, prefer normalized item-level `media_references` for downstream evidence handling. These are references only; Agent Reach does not download or analyze the binaries.

@@ -4,10 +4,20 @@ All notable changes to this fork are documented here.
 
 ## Unreleased
 
+## [1.12.0] - 2026-04-12
+
+### Added
+
+- `collect --save-dir` for one-command-one-shard evidence output, plus `ledger merge` guidance for recombining shards before downstream ledger commands
+- `ledger summarize --filter ...` for neutral counts over one caller-selected ledger slice
+- static SearXNG placeholder-config warnings in `doctor --json` without requiring a live probe
+- Twitter/X post completeness hints under `extras.engagement_complete` and `extras.media_complete`
+
 ### Changed
 
 - clarified across downstream docs, packaged skills, and Codex integration exports that external prompts and commands must use exact stable channel names such as `exa_search`, `hatena_bookmark`, and `hacker_news`
 - documented that SDK convenience aliases such as `client.exa`, `client.hatena`, and `client.hn` remain compatibility helpers only and should not be reused as CLI or `collect(...)` channel names
+- clarified bundled maintainer skill guidance so proposal shaping and formal adopt/reject review are easier to distinguish
 
 ## [1.11.0] - 2026-04-12
 

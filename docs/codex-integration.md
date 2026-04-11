@@ -9,7 +9,7 @@ Agent Reach is a Windows-first integration layer for research tooling. It expose
 - readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses`, `probed_operations`, `probe_run_coverage`, and `summary.probe_attention`
 - a thin read-only collector through `agent-reach collect --json`
 - a packaged `CollectionResult` contract through `agent-reach schema collection-result --json`
-- ledger validation, summary, query, and append helpers through `agent-reach ledger validate --json`, `agent-reach ledger summarize --json`, `agent-reach ledger query --json`, and `agent-reach ledger append --json`
+- ledger merge, validation, summary, query, and append helpers through `agent-reach ledger merge --json`, `agent-reach ledger validate --json`, `agent-reach ledger summarize --json`, `agent-reach ledger query --json`, and `agent-reach ledger append --json`
 - a non-mutating Codex export through `agent-reach export-integration --client codex`
 - bundled Codex skills for diagnostics, brief shaping, and in-session orchestration
 - repo-local Codex artifacts through `.codex-plugin/plugin.json`, `.mcp.json`, and `agent_reach/skills/` when running from a source checkout
@@ -59,7 +59,7 @@ After that, Codex can call `agent-reach collect --json` from any working directo
 
 Use `agent-reach-shape-brief` when a research ask is still underspecified and you want a fixed brief before execution. Use `agent-reach-orchestrate` when you want the same Codex session to move from intake to actual Agent Reach collection start.
 
-The bundled suite also includes three maintainer-only skills for this repository itself: `agent-reach-propose-improvements` for proposal shaping from external research, `agent-reach-maintain-proposals` for proposal review, and `agent-reach-maintain-release` for approved change shipping.
+The bundled suite also includes three maintainer-only skills for this repository itself: `agent-reach-propose-improvements` for turning raw external findings into a shortlist, `agent-reach-maintain-proposals` for formal review of a concrete proposal list, and `agent-reach-maintain-release` for approved change shipping.
 
 For most rough asks, `agent-reach-orchestrate` is the default entrypoint. Reach for `agent-reach-shape-brief` only when you want to stop before collection starts.
 

@@ -410,6 +410,51 @@ class TestCLI:
         assert ledger_record["urls"] == ["https://example.com"]
         assert ledger_record["result"] == stdout_payload
 
+    def test_collect_json_save_dir_writes_execution_shard_and_preserves_stdout(self, capsys, monkeypatch, tmp_path):
+        class _FakeClient:
+            def collect(self, channel, operation, value, limit=None):
+                return {
+                    "ok": True,
+                    "channel": channel,
+                    "operation": operation,
+                    "items": [{"id": "1", "title": "Example", "url": value}],
+                    "raw": {"limit": limit},
+                    "meta": {"count": 1, "limit": limit},
+                    "error": None,
+                }
+
+        monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
+        ledger_dir = tmp_path / ".agent-reach" / "shards"
+
+        assert (
+            main(
+                [
+                    "collect",
+                    "--channel",
+                    "web",
+                    "--operation",
+                    "read",
+                    "--input",
+                    "https://example.com",
+                    "--json",
+                    "--save-dir",
+                    str(ledger_dir),
+                    "--run-id",
+                    "run-from-cli",
+                ]
+            )
+            == 0
+        )
+        stdout_payload = json.loads(capsys.readouterr().out)
+        shard_paths = sorted(ledger_dir.glob("*.jsonl"))
+
+        assert stdout_payload["ok"] is True
+        assert len(shard_paths) == 1
+        ledger_record = json.loads(shard_paths[0].read_text(encoding="utf-8"))
+        assert ledger_record["run_id"] == "run-from-cli"
+        assert ledger_record["input"] == "https://example.com"
+        assert ledger_record["result"] == stdout_payload
+
     def test_collect_raw_mode_none_applies_to_stdout_and_saved_ledger(self, capsys, monkeypatch, tmp_path):
         class _FakeClient:
             def collect(self, channel, operation, value, limit=None):
@@ -540,7 +585,7 @@ class TestCLI:
     def test_collect_annotations_require_save(self, capsys, monkeypatch):
         class _FakeClient:
             def collect(self, channel, operation, value, limit=None):
-                raise AssertionError("collect should not run without --save")
+                raise AssertionError("collect should not run without --save or --save-dir")
 
         monkeypatch.setattr("agent_reach.cli.AgentReachClient", _FakeClient)
 
@@ -562,7 +607,7 @@ class TestCLI:
         )
         captured = capsys.readouterr()
         assert captured.out == ""
-        assert "require --save" in captured.err
+        assert "require --save or --save-dir" in captured.err
 
     def test_collect_save_records_relevance_metadata(self, capsys, monkeypatch, tmp_path):
         class _FakeClient:
@@ -1896,6 +1941,69 @@ class TestCLI:
         assert summary_payload["command"] == "ledger summarize"
         assert summary_payload["records"] == 1
         assert summary_payload["missing_metadata"]["records"] == 1
+
+    def test_ledger_summarize_command_accepts_filters(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        records = [
+            {
+                "record_type": "collection_result",
+                "run_id": "run-1",
+                "channel": "web",
+                "operation": "read",
+                "intent": "official_docs",
+                "source_role": "primary",
+                "result": {
+                    "ok": True,
+                    "channel": "web",
+                    "operation": "read",
+                    "items": [{"id": "1", "url": "https://example.com"}],
+                    "raw": None,
+                    "meta": {"input": "https://example.com", "count": 1},
+                    "error": None,
+                },
+            },
+            {
+                "record_type": "collection_result",
+                "run_id": "run-1",
+                "channel": "twitter",
+                "operation": "search",
+                "intent": "social_watch",
+                "source_role": "pulse",
+                "result": {
+                    "ok": True,
+                    "channel": "twitter",
+                    "operation": "search",
+                    "items": [{"id": "tweet-1", "url": "https://x.com/openai/status/1"}],
+                    "raw": None,
+                    "meta": {"input": "OpenAI", "count": 1},
+                    "error": None,
+                },
+            },
+        ]
+        ledger_path.write_text(
+            "".join(json.dumps(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
+
+        assert (
+            main(
+                [
+                    "ledger",
+                    "summarize",
+                    "--input",
+                    str(ledger_path),
+                    "--filter",
+                    "source_role == pulse",
+                    "--json",
+                ]
+            )
+            == 0
+        )
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["records_scanned"] == 2
+        assert payload["records"] == 1
+        assert payload["channel_counts"] == {"twitter": 1}
+        assert payload["filters"][0]["expression"] == "source_role == pulse"
 
     def test_ledger_query_command_filters_and_projects(self, capsys, tmp_path):
         ledger_path = tmp_path / "evidence.jsonl"

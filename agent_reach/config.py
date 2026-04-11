@@ -10,6 +10,12 @@ from urllib.parse import urlparse, urlunparse
 
 import yaml
 
+_SEARXNG_PLACEHOLDER_HOSTS = {
+    "example.com",
+    "example.org",
+    "example.net",
+}
+
 
 def normalize_searxng_base_url(value: Any) -> str | Any:
     """Normalize a SearXNG instance URL to its base instance root."""
@@ -31,6 +37,21 @@ def normalize_searxng_base_url(value: Any) -> str | Any:
         path = path[:-7].rstrip("/")
 
     return urlunparse((parsed.scheme or "https", parsed.netloc, path, "", "", "")).rstrip("/")
+
+
+def is_placeholder_searxng_base_url(value: Any) -> bool:
+    """Return True when a SearXNG URL still matches a docs-only placeholder host."""
+
+    normalized = normalize_searxng_base_url(value)
+    if normalized is None:
+        return False
+    parsed = urlparse(str(normalized))
+    host = (parsed.hostname or "").lower().strip()
+    if not host:
+        return False
+    if host in _SEARXNG_PLACEHOLDER_HOSTS:
+        return True
+    return any(host.endswith(f".{suffix}") for suffix in _SEARXNG_PLACEHOLDER_HOSTS)
 
 
 class Config:

@@ -45,6 +45,7 @@ _JSONL_UNSAFE_LINE_SEPARATORS = {
     "\u2028": "\\u2028",
     "\u2029": "\\u2029",
 }
+_SHARD_FILENAME_PART_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _FILTER_EXPRESSION_RE = re.compile(
     r"^\s*(?P<path>[A-Za-z0-9_.-]+)\s*(?P<operator>==|!=|>=|<=|>|<|contains)\s*(?P<value>.+?)\s*$"
 )
@@ -149,6 +150,64 @@ def save_collection_result(
     )
     append_ledger_record(path, record)
     return record
+
+
+def execution_shard_ledger_path(
+    base_dir: str | Path,
+    *,
+    run_id: str,
+    channel: str,
+    operation: str,
+    created_at: str,
+) -> Path:
+    """Return a one-execution-one-file shard path for collect --save-dir."""
+
+    root = Path(base_dir)
+    created_token = _sanitize_shard_filename_part(
+        created_at.replace(":", "").replace("-", ""),
+        fallback="created",
+    )
+    run_token = _sanitize_shard_filename_part(run_id, fallback="run")
+    channel_token = _sanitize_shard_filename_part(channel, fallback="channel")
+    operation_token = _sanitize_shard_filename_part(operation, fallback="operation")
+    stem = f"{created_token}__{run_token}__{channel_token}__{operation_token}"
+    candidate = root / f"{stem}.jsonl"
+    counter = 2
+    while candidate.exists():
+        candidate = root / f"{stem}-{counter}.jsonl"
+        counter += 1
+    return candidate
+
+
+def save_collection_result_execution_shard(
+    base_dir: str | Path,
+    result: CollectionResult,
+    *,
+    run_id: str,
+    input_value: str | None = None,
+    intent: str | None = None,
+    query_id: str | None = None,
+    source_role: str | None = None,
+) -> tuple[EvidenceLedgerRecord, Path]:
+    """Save one collection result to its own JSONL shard file."""
+
+    record = build_ledger_record(
+        result,
+        run_id=run_id,
+        input_value=input_value,
+        intent=intent,
+        query_id=query_id,
+        source_role=source_role,
+    )
+    shard_path = execution_shard_ledger_path(
+        base_dir,
+        run_id=record["run_id"],
+        channel=record["channel"],
+        operation=record["operation"],
+        created_at=record["created_at"],
+    )
+    append_ledger_record(shard_path, record)
+    return record, shard_path
 
 
 def ledger_input_paths(
@@ -291,9 +350,25 @@ def merge_ledger_inputs(
 def validate_ledger_input(input_path: str | Path, *, require_metadata: bool = False) -> dict[str, Any]:
     """Validate one evidence ledger file or a directory of ledger shards."""
 
+    return validate_ledger_input_with_filters(
+        input_path,
+        require_metadata=require_metadata,
+    )
+
+
+def validate_ledger_input_with_filters(
+    input_path: str | Path,
+    *,
+    require_metadata: bool = False,
+    filters: list[str] | None = None,
+) -> dict[str, Any]:
+    """Validate one evidence ledger file or directory, optionally restricting counts to matching records."""
+
     source = Path(input_path)
     inputs = ledger_input_paths(source)
+    parsed_filters = [_parse_filter_expression(expression) for expression in (filters or [])]
     records = 0
+    records_scanned = 0
     collection_results = 0
     items_seen = 0
     empty_lines = 0
@@ -333,7 +408,6 @@ def validate_ledger_input(input_path: str | Path, *, require_metadata: bool = Fa
                         }
                     )
                 continue
-            records += 1
             if not isinstance(record, dict):
                 invalid_record_count += 1
                 if len(invalid_records) < _DIAGNOSTIC_LIMIT:
@@ -357,6 +431,19 @@ def validate_ledger_input(input_path: str | Path, *, require_metadata: bool = Fa
                         }
                     )
                 continue
+
+            records_scanned += 1
+            context = {
+                **record,
+                "source": {
+                    "file": str(ledger_path),
+                    "line": line_number,
+                },
+            }
+            if parsed_filters and not all(_record_matches_filter(context, parsed_filter) for parsed_filter in parsed_filters):
+                continue
+
+            records += 1
             result = cast(dict[str, Any], result_payload)
             collection_results += 1
             channel = str(record.get("channel") or result.get("channel") or "unknown")
@@ -379,7 +466,10 @@ def validate_ledger_input(input_path: str | Path, *, require_metadata: bool = Fa
                 for name in ("intent", "query_id", "source_role")
                 if record.get(name) is None and meta.get(name) is None
             ]
-            _increment_if_present(intent_counts, record.get("intent") if record.get("intent") is not None else meta.get("intent"))
+            _increment_if_present(
+                intent_counts,
+                record.get("intent") if record.get("intent") is not None else meta.get("intent"),
+            )
             _increment_if_present(
                 query_id_counts,
                 record.get("query_id") if record.get("query_id") is not None else meta.get("query_id"),
@@ -439,9 +529,11 @@ def validate_ledger_input(input_path: str | Path, *, require_metadata: bool = Fa
         "require_metadata": require_metadata,
         "valid": valid,
         "files_checked": len(inputs),
+        "filters": parsed_filters,
         "records": records,
+        "records_scanned": records_scanned,
         "collection_results": collection_results,
-        "counts_scope": "parseable_records_only",
+        "counts_scope": "matched_parseable_records_only" if parsed_filters else "parseable_records_only",
         "ok_records": ok_records,
         "error_records": error_records,
         "channel_counts": channel_counts,
@@ -468,10 +560,14 @@ def validate_ledger_input(input_path: str | Path, *, require_metadata: bool = Fa
     }
 
 
-def summarize_ledger_input(input_path: str | Path) -> dict[str, Any]:
+def summarize_ledger_input(
+    input_path: str | Path,
+    *,
+    filters: list[str] | None = None,
+) -> dict[str, Any]:
     """Return non-scoring evidence ledger health counts for downstream automation."""
 
-    validation = validate_ledger_input(input_path)
+    validation = validate_ledger_input_with_filters(input_path, filters=filters)
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": utc_timestamp(),
@@ -480,7 +576,9 @@ def summarize_ledger_input(input_path: str | Path) -> dict[str, Any]:
         "valid": validation["valid"],
         "counts_scope": validation["counts_scope"],
         "files_checked": validation["files_checked"],
+        "filters": validation["filters"],
         "records": validation["records"],
+        "records_scanned": validation["records_scanned"],
         "collection_results": validation["collection_results"],
         "items_seen": validation["items_seen"],
         "ok_records": validation["ok_records"],
@@ -663,6 +761,14 @@ def _increment_if_present(counts: dict[str, int], value: Any) -> None:
         return
     key = str(value)
     counts[key] = counts.get(key, 0) + 1
+
+
+def _sanitize_shard_filename_part(value: Any, *, fallback: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return fallback
+    sanitized = _SHARD_FILENAME_PART_RE.sub("-", text).strip("._-")
+    return sanitized[:80] or fallback
 
 
 def _resolved_path(path: str | Path | None) -> Path | None:

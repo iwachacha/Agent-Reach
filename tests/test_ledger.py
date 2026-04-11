@@ -9,10 +9,12 @@ from agent_reach.ledger import (
     append_ledger_record,
     build_ledger_record,
     default_run_id,
+    execution_shard_ledger_path,
     ledger_input_paths,
     merge_ledger_inputs,
     query_ledger_input,
     save_collection_result,
+    save_collection_result_execution_shard,
     save_collection_result_sharded,
     shard_ledger_path,
     summarize_ledger_input,
@@ -177,6 +179,41 @@ def test_save_collection_result_sharded_writes_expected_file(tmp_path):
     assert shard_path.exists()
 
 
+def test_execution_shard_ledger_path_uses_unique_per_execution_name(tmp_path):
+    first = execution_shard_ledger_path(
+        tmp_path,
+        run_id="run with spaces",
+        channel="web",
+        operation="read",
+        created_at="2026-04-12T00:00:00Z",
+    )
+    first.write_text("", encoding="utf-8")
+    second = execution_shard_ledger_path(
+        tmp_path,
+        run_id="run with spaces",
+        channel="web",
+        operation="read",
+        created_at="2026-04-12T00:00:00Z",
+    )
+
+    assert first.name == "20260412T000000Z__run-with-spaces__web__read.jsonl"
+    assert second.name == "20260412T000000Z__run-with-spaces__web__read-2.jsonl"
+
+
+def test_save_collection_result_execution_shard_writes_one_record_file(tmp_path):
+    record, shard_path = save_collection_result_execution_shard(
+        tmp_path / "ledger",
+        _success_result(),
+        run_id="run-collect",
+        intent="official_docs",
+    )
+
+    assert record["run_id"] == "run-collect"
+    assert record["intent"] == "official_docs"
+    assert shard_path.exists()
+    assert json.loads(shard_path.read_text(encoding="utf-8"))["run_id"] == "run-collect"
+
+
 def test_ledger_input_paths_reads_directory(tmp_path):
     source_dir = tmp_path / "ledger"
     source_dir.mkdir()
@@ -304,6 +341,38 @@ def test_summarize_ledger_input_returns_health_counts(tmp_path):
     assert payload["intent_counts"] == {"official_docs": 1}
     assert payload["query_id_counts"] == {"q01": 1}
     assert payload["source_role_counts"] == {"web_discovery": 1}
+
+
+def test_summarize_ledger_input_can_filter_records(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    records = [
+        build_ledger_record(
+            _success_result(),
+            run_id="run-1",
+            intent="official_docs",
+            query_id="q01",
+            source_role="web_discovery",
+        ),
+        build_ledger_record(
+            _error_result(),
+            run_id="run-1",
+            intent="social_watch",
+            query_id="q02",
+            source_role="social_discovery",
+        ),
+    ]
+    path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    payload = summarize_ledger_input(path, filters=["intent == official_docs"])
+
+    assert payload["records_scanned"] == 2
+    assert payload["records"] == 1
+    assert payload["counts_scope"] == "matched_parseable_records_only"
+    assert payload["intent_counts"] == {"official_docs": 1}
+    assert payload["error_records"] == 0
 
 
 def test_query_ledger_input_filters_and_projects(tmp_path):

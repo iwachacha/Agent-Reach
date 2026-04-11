@@ -148,6 +148,19 @@ def test_searxng_requires_config(tmp_path):
     assert "configure searxng-base-url" in message
 
 
+def test_searxng_placeholder_config_warns_without_probe(tmp_path):
+    from agent_reach.config import Config
+
+    config = Config(config_path=tmp_path / "config.yaml")
+    config.set("searxng_base_url", "https://your-searxng.example.com/search")
+
+    status, message, extra = SearXNGChannel().check_detailed(config)
+
+    assert status == "warn"
+    assert "placeholder example value" in message
+    assert extra["diagnostic_basis"] == "placeholder_config"
+
+
 def test_crawl4ai_can_handle_http_urls():
     channel = Crawl4AIChannel()
     assert channel.can_handle("https://example.com")

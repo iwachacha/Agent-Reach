@@ -1,11 +1,13 @@
 ---
 name: agent-reach-maintain-proposals
-description: Evaluate proposed changes to Agent Reach itself. Use when Codex needs to review external research findings or other AI-generated improvement ideas against Agent Reach's thin-interface policy, caller-control rules, existing features, and packaged surfaces, then decide adopt_now, reject, or defer before any edits.
+description: Evaluate proposed changes to Agent Reach itself. Use when Codex needs to review a concrete external proposal list against Agent Reach's thin-interface policy, caller-control rules, existing features, and packaged surfaces, then decide adopt_now, reject, or defer before any edits.
 ---
 
 # Agent Reach Maintain Proposals
 
 Review proposed changes to Agent Reach before code changes.
+
+This is the right maintainer skill when someone has already pasted candidate improvements and asks for an adopt/reject/defer decision.
 
 ## Workflow
 
