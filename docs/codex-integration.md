@@ -1,12 +1,12 @@
 # Agent Reach Codex Integration
 
-Agent Reach is a Windows-first integration layer for research tooling. It now exposes a thin read-only collection surface, while keeping scheduling and publishing outside the repo.
+Agent Reach is a Windows-first integration layer for research tooling. It exposes a thin read-only collection surface while keeping scheduling and publishing outside the repo.
 
 ## What it provides
 
 - a stable channel registry through `agent-reach channels --json`
 - per-operation option contracts through `channels --json` `operation_contracts`, so downstream code can choose pagination and time-window inputs itself
-- readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses`, `probed_operations`, `probe_run_coverage`, and `summary.probe_attention` for downstream routing
+- readiness diagnostics through `agent-reach doctor --json`, including `operation_statuses`, `probed_operations`, `probe_run_coverage`, and `summary.probe_attention`
 - a thin read-only collector through `agent-reach collect --json`
 - ledger validation and append helpers through `agent-reach ledger validate --json` and `agent-reach ledger append --json`
 - a non-mutating Codex export through `agent-reach export-integration --client codex`
@@ -32,21 +32,23 @@ For everyday Codex usage in arbitrary repositories, install Agent Reach globally
 ```powershell
 uv tool install --force git+https://github.com/iwachacha/Agent-Reach.git
 agent-reach skill --install
+agent-reach version
 agent-reach doctor --json --probe
+```
+
+If you need a reproducible build, pin a commit or ref:
+
+```powershell
+uv tool install --force git+https://github.com/iwachacha/Agent-Reach.git@<commit-or-ref>
+agent-reach skill --install
+agent-reach version
 ```
 
 After that, Codex can call `agent-reach collect --json` from any working directory. The downstream project does not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files unless it explicitly wants repo-local plugin artifacts.
 
 `export-integration --format json` also includes `codex_runtime_policy`, which is the machine-readable version of this rule set. Downstream setup tools should prefer `agent-reach collect --json`, should not vendor Agent Reach files by default, and should treat large-scale research as explicit opt-in rather than auto-escalating lightweight asks.
 
-## Repo artifacts
-
-- Plugin manifest: `.codex-plugin/plugin.json`
-- MCP config snippet: `.mcp.json`
-- Bundled skill source: `agent_reach/skill`
-- Python SDK docs: `docs/python-sdk.md`
-- Field research improvements: `docs/field-research-improvements-2026-04-10.md`
-- Agent Reach Nexus concept: `docs/agent-reach-nexus-concept.md`
+`agent-reach check-update --json` compares the installed build to upstream `Panniantong/Agent-Reach` releases. It is useful for upstream awareness, but the current fork build should still be chosen from the fork repo URL or a pinned commit.
 
 When `agent-reach` is running from a tool install instead of a source checkout, `export-integration` will not point at nonexistent repo-root files. In that mode it returns:
 
@@ -77,3 +79,18 @@ When `agent-reach` is running from a tool install instead of a source checkout, 
 These channels are exposed as metadata, setup guidance, diagnostics, and read-only collection operations so downstream tools can wire their own workflows without scraping repo docs. YouTube returns video metadata, subtitle/caption availability, thumbnail references, and normalized linked media references; Agent Reach does not perform media binary analysis.
 
 When a channel supports bounded pagination or time windows, those controls are exposed as machine-readable option descriptors. Downstream code decides whether to use `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach only forwards them and records pagination metadata in the returned `meta`.
+
+## Compatibility Snapshot
+
+| Surface | Status | Notes |
+| --- | --- | --- |
+| Native Windows PowerShell | Supported | Primary target |
+| Codex skill install | Supported | Uses `CODEX_HOME/skills` or `~/.codex/skills` |
+| Codex plugin manifest | Supported | Repo-local in checkouts, inline export in tool installs |
+| MCP wiring for Exa | Supported | Repo-local in checkouts, inline export in tool installs |
+| Python SDK | Supported | `AgentReachClient` works after install into the caller project environment |
+| Read-only collect CLI | Supported | `agent-reach collect --json` |
+| Core-based doctor exit policy | Supported | `doctor --json` exits on core readiness by default and reports optional gaps under `summary.advisory_not_ready` |
+| Evidence ledger validation | Supported | `ledger validate --json` checks saved JSONL artifacts, and `ledger append --json` can add a captured `CollectionResult` later |
+| macOS/Linux installer automation | Not first-class | Use `install --safe` for guidance only |
+| Full workflow orchestration | Deferred | Scheduling, ranking, summarization, and publishing stay downstream |

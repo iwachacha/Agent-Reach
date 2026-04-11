@@ -41,26 +41,25 @@ def test_docs_folder_only_contains_supported_docs():
     docs_dir = _repo_root() / "docs"
     names = {path.name for path in docs_dir.iterdir()}
 
-    required_docs = {
-        "agent-reach-nexus-concept.md",
-        "codex-compatibility.md",
+    expected_docs = {
         "codex-integration.md",
         "downstream-usage.md",
-        "field-research-improvements-2026-04-10.md",
         "install.md",
         "python-sdk.md",
         "troubleshooting.md",
     }
-    allowed_docs = {
-        *required_docs,
-        "agent-reach-external-large-scale-research-prompt-2026-04-11.md",
-        "agent-reach-external-mixed-collection-prompt-2026-04-11.md",
-        "agent-reach-external-test-prompt-2026-04-11.md",
-        "agent-reach-scale-evolution-research-2026-04-10.md",
-    }
 
-    assert required_docs <= names
-    assert names <= allowed_docs
+    assert names == expected_docs
+
+
+def test_llms_txt_points_at_current_fork_docs():
+    llms = (_repo_root() / "llms.txt").read_text(encoding="utf-8")
+
+    assert "github.com/iwachacha/Agent-Reach/blob/main/docs/install.md" in llms
+    assert "github.com/Panniantong/Agent-Reach/blob/main/" not in llms
+    assert "hacker_news" in llms
+    assert "mcp_registry" in llms
+    assert "reddit" in llms
 
 
 def test_caller_control_policy_is_documented_consistently():

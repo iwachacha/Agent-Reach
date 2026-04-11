@@ -7,6 +7,7 @@ import time
 import warnings
 from urllib.parse import quote, unquote, urlparse
 
+from agent_reach import __version__
 from agent_reach.media_references import build_media_reference, dedupe_media_references
 from agent_reach.results import (
     CollectionResult,
@@ -19,7 +20,7 @@ from agent_reach.source_hints import registry_entry_source_hints
 
 from .base import BaseAdapter
 
-_UA = "agent-reach/1.6.0 (+https://github.com/iwachacha/Agent-Reach)"
+_UA = f"agent-reach/{__version__} (+https://github.com/iwachacha/Agent-Reach)"
 _BASE_URL = "https://registry.modelcontextprotocol.io"
 _PAGE_SIZE = 100
 _MAX_PAGES = 5

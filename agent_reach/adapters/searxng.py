@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 import warnings
 
+from agent_reach import __version__
 from agent_reach.results import (
     CollectionResult,
     NormalizedItem,
@@ -17,7 +18,7 @@ from agent_reach.source_hints import search_result_source_hints
 
 from .base import BaseAdapter
 
-_UA = "agent-reach/1.6.0 (+https://github.com/iwachacha/Agent-Reach)"
+_UA = f"agent-reach/{__version__} (+https://github.com/iwachacha/Agent-Reach)"
 
 
 def _import_requests():

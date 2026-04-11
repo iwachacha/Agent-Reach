@@ -4,10 +4,21 @@ Agent Reach is a Windows-first integration layer for research tooling on Codex-s
 
 ## Quick start
 
-- Install guide: https://github.com/Panniantong/Agent-Reach/blob/main/docs/install.md
-- Python SDK: https://github.com/Panniantong/Agent-Reach/blob/main/docs/python-sdk.md
-- Repository README: https://github.com/Panniantong/Agent-Reach/blob/main/README.md
-- Skill guide: https://github.com/Panniantong/Agent-Reach/blob/main/agent_reach/skill/SKILL.md
+- Install guide: https://github.com/iwachacha/Agent-Reach/blob/main/docs/install.md
+- Downstream usage: https://github.com/iwachacha/Agent-Reach/blob/main/docs/downstream-usage.md
+- Codex integration: https://github.com/iwachacha/Agent-Reach/blob/main/docs/codex-integration.md
+- Python SDK: https://github.com/iwachacha/Agent-Reach/blob/main/docs/python-sdk.md
+- Troubleshooting: https://github.com/iwachacha/Agent-Reach/blob/main/docs/troubleshooting.md
+- Repository README: https://github.com/iwachacha/Agent-Reach/blob/main/README.md
+- Skill guide: https://github.com/iwachacha/Agent-Reach/blob/main/agent_reach/skill/SKILL.md
+
+## Install the latest fork build
+
+- `uv tool install --force git+https://github.com/iwachacha/Agent-Reach.git`
+- `agent-reach skill --install`
+- `agent-reach version`
+- Pin an exact build with `git+https://github.com/iwachacha/Agent-Reach.git@<commit-or-ref>`
+- Do not rely on upstream release tags to identify the latest fork build
 
 ## Stable external surfaces
 
@@ -15,6 +26,9 @@ Agent Reach is a Windows-first integration layer for research tooling on Codex-s
 - `agent-reach doctor --json`
 - `agent-reach doctor --json --probe`
 - `agent-reach collect --channel <name> --operation <op> --input <value> --json`
+- `agent-reach plan candidates --input .agent-reach/evidence.jsonl --json`
+- `agent-reach ledger validate --input .agent-reach/evidence.jsonl --json`
+- `agent-reach ledger append --input RESULT.json --output .agent-reach/evidence.jsonl --json`
 - `agent-reach install --dry-run --json`
 - `agent-reach export-integration --client codex --format json`
 - `agent-reach check-update --json`
@@ -22,6 +36,7 @@ Agent Reach is a Windows-first integration layer for research tooling on Codex-s
 
 ## Current scope
 
-- Supported channels: `web`, `exa_search`, `github`, `hatena_bookmark`, `bluesky`, `qiita`, `youtube`, `rss`, optional `twitter`
+- Supported channels: `web`, `exa_search`, `github`, `hatena_bookmark`, `bluesky`, `qiita`, `youtube`, `rss`, `searxng`, `crawl4ai`, `hacker_news`, `mcp_registry`, `reddit`, `twitter`
 - Purpose: bootstrapper, channel registry, readiness diagnostics, thin read-only collection helper
 - Non-goal in this phase: full workflow orchestration such as scheduling, ranking, summarization, or publishing
+- External projects should prefer `agent-reach collect --json` and should not copy `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` by default

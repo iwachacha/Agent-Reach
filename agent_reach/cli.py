@@ -1650,6 +1650,7 @@ def _build_update_payload() -> dict[str, object]:
         "command": "check-update",
         "current_version": __version__,
         "upstream_repo": UPSTREAM_REPO,
+        "comparison_target": "upstream_release",
         "status": "error",
     }
     release_url = f"https://api.github.com/repos/{UPSTREAM_REPO}/releases/latest"
@@ -1671,10 +1672,13 @@ def _build_update_payload() -> dict[str, object]:
         release_payload = response.json()
         latest = release_payload.get("tag_name", "").lstrip("v")
         payload["latest_version"] = latest or __version__
-        if latest and latest != __version__:
+        comparison = _compare_versions(__version__, latest)
+        if latest and comparison < 0:
             payload["status"] = "update_available"
             body = release_payload.get("body", "").strip()
             payload["release_notes_preview"] = body.splitlines()[:20] if body else []
+        elif latest and comparison > 0:
+            payload["status"] = "ahead_of_upstream_release"
         else:
             payload["status"] = "up_to_date"
         return payload
@@ -1743,6 +1747,13 @@ def _render_update_payload(payload: dict) -> str:
         lines.append("Already up to date.")
         return "\n".join(lines)
 
+    if status == "ahead_of_upstream_release":
+        lines.append(
+            "This fork is ahead of the latest upstream release: "
+            f"v{payload.get('latest_version', 'unknown')}"
+        )
+        return "\n".join(lines)
+
     if status == "unknown":
         commit = payload.get("latest_main_commit", {})
         lines.append(
@@ -1753,6 +1764,36 @@ def _render_update_payload(payload: dict) -> str:
 
     lines.append("[WARN] Unknown update status")
     return "\n".join(lines)
+
+
+def _parse_version_parts(value: str) -> tuple[int, ...] | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    parts = text.split(".")
+    parsed: list[int] = []
+    for part in parts:
+        if not part.isdigit():
+            return None
+        parsed.append(int(part))
+    return tuple(parsed)
+
+
+def _compare_versions(current: str, latest: str) -> int:
+    current_parts = _parse_version_parts(current)
+    latest_parts = _parse_version_parts(latest)
+    if current_parts is not None and latest_parts is not None:
+        width = max(len(current_parts), len(latest_parts))
+        current_parts += (0,) * (width - len(current_parts))
+        latest_parts += (0,) * (width - len(latest_parts))
+        if current_parts < latest_parts:
+            return -1
+        if current_parts > latest_parts:
+            return 1
+        return 0
+    if current == latest:
+        return 0
+    return -1
 
 
 def _cmd_check_update(args) -> int:

@@ -2,6 +2,26 @@
 
 This fork targets native Windows installs for Codex, GitHub Actions, and other downstream tooling that needs a predictable read-only collection surface.
 
+## Install the latest fork build
+
+For the latest fork state, install from the fork repo URL:
+
+```powershell
+uv tool install --force git+https://github.com/iwachacha/Agent-Reach.git
+agent-reach skill --install
+agent-reach version
+```
+
+To pin a specific build, install an exact commit or ref:
+
+```powershell
+uv tool install --force git+https://github.com/iwachacha/Agent-Reach.git@<commit-or-ref>
+agent-reach skill --install
+agent-reach version
+```
+
+This fork may be ahead of the latest upstream release tag. Use `agent-reach check-update --json` as an upstream release check, not as the canonical source of the latest fork commit.
+
 ## Local install from source
 
 ```powershell
@@ -20,7 +40,7 @@ uv tool install --force .
 agent-reach version
 ```
 
-For the evidence ledger and candidate planner release, `agent-reach version` should report `Agent Reach v1.6.0` or newer.
+For the current collection and ledger surface, `agent-reach version` should report `Agent Reach v1.6.0` or newer.
 
 ## Preview mode
 

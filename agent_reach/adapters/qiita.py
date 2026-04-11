@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 import warnings
 
+from agent_reach import __version__
 from agent_reach.media_references import (
     build_media_reference,
     dedupe_media_references,
@@ -22,7 +23,7 @@ from agent_reach.source_hints import article_source_hints
 
 from .base import BaseAdapter
 
-_UA = "agent-reach/1.4.0 (+https://github.com/iwachacha/Agent-Reach)"
+_UA = f"agent-reach/{__version__} (+https://github.com/iwachacha/Agent-Reach)"
 _ITEMS_API = "https://qiita.com/api/v2/items"
 _BODY_SNIPPET_CHARS = 500
 _BODY_MODES = {"none", "snippet", "full"}

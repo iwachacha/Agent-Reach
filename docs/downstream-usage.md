@@ -19,6 +19,14 @@ agent-reach version
 agent-reach doctor --json --probe
 ```
 
+When you need an exact build, pin a commit or ref instead of relying on upstream release tags:
+
+```powershell
+uv tool install --force git+https://github.com/iwachacha/Agent-Reach.git@<commit-or-ref>
+agent-reach skill --install
+agent-reach version
+```
+
 To refresh a global install to an exact pushed ref, use:
 
 ```powershell
@@ -48,6 +56,8 @@ agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit
 ```
 
 This does not require `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files inside the downstream project.
+
+`agent-reach check-update --json` compares this fork to upstream `Panniantong/Agent-Reach` releases. Treat it as upstream awareness, not as the source of truth for the latest fork commit.
 
 Treat `extras.source_hints`, `extras.media_references`, and web `meta` hygiene fields as diagnostics only. They can help downstream code explain provenance or flag suspicious extraction shape, but they are not ranking, trust scoring, summarization, or publishing instructions. Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel controls such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`; Agent Reach does not choose those inputs for the caller. `collect --max-text-chars N` is only for human text-mode snippets and does not truncate `--json` output or saved ledgers.
 

@@ -4,6 +4,16 @@ All notable changes to this fork are documented here.
 
 ## Unreleased
 
+### Changed
+
+- removed transient prompt and research-note docs so the repo ships only the external-use guides that match the current CLI surface
+- aligned `README.md`, `llms.txt`, and Codex integration exports around the current channel registry and no-copy downstream workflow
+- fixed `check-update` so fork builds newer than the latest upstream release are reported as ahead of upstream instead of update-available
+
+### Fixed
+
+- normalized adapter User-Agent strings to use the current package version instead of stale hard-coded values
+
 ## [1.6.0] - 2026-04-10
 
 ### Added

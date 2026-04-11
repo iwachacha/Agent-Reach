@@ -8,6 +8,7 @@ import warnings
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+from agent_reach import __version__
 from agent_reach.media_references import build_media_reference, dedupe_media_references
 from agent_reach.results import (
     CollectionResult,
@@ -18,7 +19,7 @@ from agent_reach.results import (
 
 from .base import BaseAdapter
 
-_UA = "agent-reach/1.4.0 (+https://github.com/iwachacha/Agent-Reach)"
+_UA = f"agent-reach/{__version__} (+https://github.com/iwachacha/Agent-Reach)"
 _ENTRY_API = "https://b.hatena.ne.jp/entry/json/"
 _COUNT_API = "https://bookmark.hatenaapis.com/count/entry"
 

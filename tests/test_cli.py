@@ -1850,6 +1850,62 @@ class TestCLI:
         payload = json.loads(capsys.readouterr().out)
         assert payload["status"] == "up_to_date"
 
+    def test_check_update_json_when_fork_is_ahead_of_upstream(self, capsys, monkeypatch):
+        monkeypatch.setattr(
+            cli,
+            "_build_update_payload",
+            lambda: {
+                "schema_version": "2026-04-10",
+                "generated_at": "2026-04-10T00:00:00Z",
+                "command": "check-update",
+                "current_version": "1.6.0",
+                "upstream_repo": "Panniantong/Agent-Reach",
+                "comparison_target": "upstream_release",
+                "status": "ahead_of_upstream_release",
+                "latest_version": "1.4.0",
+            },
+        )
+        assert main(["check-update", "--json"]) == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["status"] == "ahead_of_upstream_release"
+
+    def test_render_update_payload_reports_ahead_of_upstream_release(self):
+        rendered = cli._render_update_payload(
+            {
+                "current_version": "1.6.0",
+                "status": "ahead_of_upstream_release",
+                "latest_version": "1.4.0",
+            }
+        )
+
+        assert "Current version: v1.6.0" in rendered
+        assert "ahead of the latest upstream release" in rendered
+
+    def test_compare_versions_handles_newer_current_release(self):
+        assert cli._compare_versions("1.6.0", "1.4.0") == 1
+        assert cli._compare_versions("1.4.0", "1.4.0") == 0
+        assert cli._compare_versions("1.4.0", "1.6.0") == -1
+
+    def test_build_update_payload_marks_fork_ahead_of_upstream_release(self, monkeypatch):
+        class Response:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"tag_name": "v1.4.0", "body": "notes"}
+
+        monkeypatch.setattr(cli, "__version__", "1.6.0")
+        monkeypatch.setattr(
+            cli,
+            "_github_get_with_retry",
+            lambda _url, timeout=10, retries=3: (Response(), None, 1),
+        )
+
+        payload = cli._build_update_payload()
+
+        assert payload["status"] == "ahead_of_upstream_release"
+        assert payload["latest_version"] == "1.4.0"
+
 
 class TestCheckUpdateRetry:
     def test_retry_timeout_classification(self):

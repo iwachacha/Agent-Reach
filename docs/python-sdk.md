@@ -18,6 +18,12 @@ SDK installs for a caller-managed Python environment:
 uv pip install -e .
 ```
 
+Or install the current fork directly into the host project:
+
+```powershell
+uv pip install "agent-reach @ git+https://github.com/iwachacha/Agent-Reach.git"
+```
+
 Or install a built wheel into the host project:
 
 ```powershell

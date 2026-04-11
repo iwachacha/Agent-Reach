@@ -87,8 +87,13 @@ def test_export_points_at_existing_checkout_artifacts():
     assert Path(payload["plugin_manifest"]).exists()
     assert Path(payload["mcp_config"]).exists()
     assert all(Path(path).exists() for path in payload["recommended_docs"])
-    assert any(path.endswith("field-research-improvements-2026-04-10.md") for path in payload["recommended_docs"])
-    assert any(path.endswith("agent-reach-nexus-concept.md") for path in payload["recommended_docs"])
+    assert {Path(path).name for path in payload["recommended_docs"]} == {
+        "install.md",
+        "codex-integration.md",
+        "downstream-usage.md",
+        "python-sdk.md",
+        "troubleshooting.md",
+    }
     channel_contracts = {channel["name"]: channel for channel in payload["channels"]}
     assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][0]["name"] == "body_mode"
     assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][1]["name"] == "page_size"
@@ -149,6 +154,7 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
     assert plugin_destination.parts[-2:] == (".codex-plugin", "plugin.json")
     assert mcp_destination.name == ".mcp.json"
     assert payload["documentation_summary"]
+    assert any("latest fork build" in item for item in payload["documentation_summary"])
     assert any("ledger validate" in item for item in payload["documentation_summary"])
     assert any("core exit policy" in item for item in payload["documentation_summary"])
     assert any("YouTube collection exposes" in item for item in payload["documentation_summary"])

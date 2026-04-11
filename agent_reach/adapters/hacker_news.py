@@ -10,6 +10,7 @@ import warnings
 from typing import cast
 from urllib.parse import urlparse
 
+from agent_reach import __version__
 from agent_reach.results import (
     CollectionResult,
     NormalizedItem,
@@ -21,7 +22,7 @@ from agent_reach.source_hints import forum_post_source_hints, search_result_sour
 
 from .base import BaseAdapter
 
-_UA = "agent-reach/1.6.0 (+https://github.com/iwachacha/Agent-Reach)"
+_UA = f"agent-reach/{__version__} (+https://github.com/iwachacha/Agent-Reach)"
 _FIREBASE_BASE = "https://hacker-news.firebaseio.com/v0"
 _ALGOLIA_BASE = "https://hn.algolia.com/api/v1"
 _LIST_ENDPOINTS = {

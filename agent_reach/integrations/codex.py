@@ -59,12 +59,11 @@ def _artifact_paths(repo_root: Path) -> dict[str, Path]:
     return {
         "plugin_manifest": repo_root / ".codex-plugin" / "plugin.json",
         "mcp_config": repo_root / ".mcp.json",
+        "docs_install": repo_root / "docs" / "install.md",
         "docs_codex_integration": repo_root / "docs" / "codex-integration.md",
-        "docs_codex_compatibility": repo_root / "docs" / "codex-compatibility.md",
         "docs_downstream_usage": repo_root / "docs" / "downstream-usage.md",
         "docs_python_sdk": repo_root / "docs" / "python-sdk.md",
-        "docs_field_research_improvements": repo_root / "docs" / "field-research-improvements-2026-04-10.md",
-        "docs_agent_reach_nexus_concept": repo_root / "docs" / "agent-reach-nexus-concept.md",
+        "docs_troubleshooting": repo_root / "docs" / "troubleshooting.md",
     }
 
 
@@ -90,12 +89,11 @@ def _existing_path(path: Path) -> str | None:
 
 def _recommended_docs(repo_root: Path) -> list[str]:
     docs = [
+        _artifact_paths(repo_root)["docs_install"],
         _artifact_paths(repo_root)["docs_codex_integration"],
-        _artifact_paths(repo_root)["docs_codex_compatibility"],
         _artifact_paths(repo_root)["docs_downstream_usage"],
         _artifact_paths(repo_root)["docs_python_sdk"],
-        _artifact_paths(repo_root)["docs_field_research_improvements"],
-        _artifact_paths(repo_root)["docs_agent_reach_nexus_concept"],
+        _artifact_paths(repo_root)["docs_troubleshooting"],
     ]
     return [str(path) for path in docs if path.exists()]
 
@@ -185,6 +183,7 @@ def _mcp_config_inline(repo_root: Path) -> dict[str, Any]:
 
 def _documentation_summary() -> list[str]:
     return [
+        "Install the latest fork build from `git+https://github.com/iwachacha/Agent-Reach.git` or pin a commit/ref when reproducibility matters.",
         "Use `agent-reach collect --json` as the primary external interface in arbitrary projects.",
         "Let the calling workflow choose request scale, channels, pagination, ranking, summarization, and posting; Agent Reach exposes capabilities but does not choose scope for the caller.",
         "Inspect `agent-reach channels --json` operation contracts before choosing per-channel options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` downstream.",
@@ -200,6 +199,7 @@ def _documentation_summary() -> list[str]:
         "Use `agent-reach channels --json`, `doctor --json`, and `doctor --json --probe` for discovery and diagnostics.",
         "Tool installs expose the CLI. Import `AgentReachClient` only after installing Agent Reach into the caller Python environment.",
         "If `plugin_manifest` or `mcp_config` is null, write the inline payloads to the suggested destinations instead.",
+        "Use `agent-reach check-update --json` as an upstream release check; the latest upstream release can lag the latest fork commit.",
         "After pushing a custom ref, refresh a global install with `uv tool install --force git+<remote-url>@<ref>` and then rerun `agent-reach skill --install`.",
     ]
 
