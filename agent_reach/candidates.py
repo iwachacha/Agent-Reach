@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 from urllib.parse import urlsplit, urlunsplit
 
+from agent_reach.ledger import iter_jsonl_lines
 from agent_reach.schemas import SCHEMA_VERSION, utc_timestamp
 
 
@@ -171,11 +172,11 @@ def _read_collection_records(path: Path) -> tuple[list[dict[str, Any]], int]:
     records: list[dict[str, Any]] = []
     skipped_records = 0
     try:
-        lines = path.read_text(encoding="utf-8-sig").splitlines()
+        lines = list(iter_jsonl_lines(path))
     except OSError as exc:
         raise CandidatePlanError(f"Could not read evidence input: {exc}") from exc
 
-    for line_number, line in enumerate(lines, start=1):
+    for line_number, line in lines:
         text = line.strip()
         if not text:
             continue

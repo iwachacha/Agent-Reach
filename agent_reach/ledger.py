@@ -36,7 +36,14 @@ class EvidenceLedgerRecord(TypedDict):
 _LEDGER_GLOB = "*.jsonl"
 _SHARD_CHOICES = {"channel", "operation", "channel-operation"}
 _LARGE_TEXT_CHARS = 10_000
+_LARGE_RAW_CHARS = 100_000
 _DIAGNOSTIC_LIMIT = 50
+_UTF8_BOM = b"\xef\xbb\xbf"
+_JSONL_UNSAFE_LINE_SEPARATORS = {
+    "\u0085": "\\u0085",
+    "\u2028": "\\u2028",
+    "\u2029": "\\u2029",
+}
 
 
 def default_run_id() -> str:
@@ -88,8 +95,28 @@ def append_ledger_record(path: str | Path, record: EvidenceLedgerRecord) -> None
     ledger_path = Path(path)
     _ensure_parent_dir(ledger_path)
     with ledger_path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False))
+        handle.write(_jsonl_record_text(record))
         handle.write("\n")
+
+
+def iter_jsonl_lines(path: str | Path) -> Iterable[tuple[int, str]]:
+    """Yield physical JSONL lines split only on LF/CRLF bytes.
+
+    Python's str.splitlines() treats Unicode line separators such as U+2028
+    as line boundaries. JSONL records may legitimately contain those
+    characters inside JSON strings, so ledger readers must split on physical
+    LF bytes only.
+    """
+
+    with Path(path).open("rb") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            if line_number == 1 and raw_line.startswith(_UTF8_BOM):
+                raw_line = raw_line[len(_UTF8_BOM) :]
+            if raw_line.endswith(b"\n"):
+                raw_line = raw_line[:-1]
+            if raw_line.endswith(b"\r"):
+                raw_line = raw_line[:-1]
+            yield line_number, raw_line.decode("utf-8")
 
 
 def save_collection_result(
@@ -152,7 +179,7 @@ def iter_ledger_records(path: str | Path, *, allow_missing: bool = False) -> Ite
     """Yield parsed JSON records from one ledger file or a ledger directory."""
 
     for ledger_path in ledger_input_paths(path, allow_missing=allow_missing):
-        for line in ledger_path.read_text(encoding="utf-8-sig").splitlines():
+        for _line_number, line in iter_jsonl_lines(ledger_path):
             if not line.strip():
                 continue
             try:
@@ -234,10 +261,10 @@ def merge_ledger_inputs(
     records_written = 0
     with destination.open("w", encoding="utf-8", newline="\n") as handle:
         for ledger_path in inputs:
-            for line in ledger_path.read_text(encoding="utf-8-sig").splitlines():
+            for _line_number, line in iter_jsonl_lines(ledger_path):
                 if not line.strip():
                     continue
-                handle.write(line.rstrip("\n"))
+                handle.write(_escape_jsonl_line_separators(line))
                 handle.write("\n")
                 records_written += 1
 
@@ -267,9 +294,17 @@ def validate_ledger_input(input_path: str | Path) -> dict[str, Any]:
     invalid_lines: list[dict[str, Any]] = []
     invalid_records: list[dict[str, Any]] = []
     large_text_fields: list[dict[str, Any]] = []
+    large_raw_payloads: list[dict[str, Any]] = []
+    ok_records = 0
+    error_records = 0
+    channel_counts: dict[str, int] = {}
+    operation_counts: dict[str, int] = {}
+    error_codes: dict[str, int] = {}
+    missing_metadata_counts = {"intent": 0, "query_id": 0, "source_role": 0}
+    missing_metadata_samples: list[dict[str, Any]] = []
 
     for ledger_path in inputs:
-        for line_number, line in enumerate(ledger_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
+        for line_number, line in iter_jsonl_lines(ledger_path):
             if not line.strip():
                 empty_lines += 1
                 continue
@@ -312,6 +347,49 @@ def validate_ledger_input(input_path: str | Path) -> dict[str, Any]:
                 continue
             result = cast(dict[str, Any], result_payload)
             collection_results += 1
+            channel = str(record.get("channel") or result.get("channel") or "unknown")
+            operation = str(record.get("operation") or result.get("operation") or "unknown")
+            channel_counts[channel] = channel_counts.get(channel, 0) + 1
+            operation_counts[operation] = operation_counts.get(operation, 0) + 1
+            if bool(result.get("ok")):
+                ok_records += 1
+            else:
+                error_records += 1
+                error = result.get("error") if isinstance(result.get("error"), dict) else None
+                code = record.get("error_code") or (error.get("code") if error else None)
+                if code:
+                    error_code = str(code)
+                    error_codes[error_code] = error_codes.get(error_code, 0) + 1
+            raw_meta = result.get("meta")
+            meta = cast(dict[str, Any], raw_meta) if isinstance(raw_meta, dict) else {}
+            missing_fields = [
+                name
+                for name in ("intent", "query_id", "source_role")
+                if record.get(name) is None and meta.get(name) is None
+            ]
+            for name in missing_fields:
+                missing_metadata_counts[name] += 1
+            if missing_fields and len(missing_metadata_samples) < _DIAGNOSTIC_LIMIT:
+                missing_metadata_samples.append(
+                    {
+                        "file": str(ledger_path),
+                        "line": line_number,
+                        "channel": channel,
+                        "operation": operation,
+                        "missing": missing_fields,
+                    }
+                )
+            raw_length = _raw_payload_length(result.get("raw"))
+            if raw_length > _LARGE_RAW_CHARS and len(large_raw_payloads) < _DIAGNOSTIC_LIMIT:
+                large_raw_payloads.append(
+                    {
+                        "file": str(ledger_path),
+                        "line": line_number,
+                        "channel": channel,
+                        "operation": operation,
+                        "raw_length": raw_length,
+                    }
+                )
             items = result.get("items") or []
             items_seen += len(items)
             for item in items:
@@ -338,6 +416,16 @@ def validate_ledger_input(input_path: str | Path) -> dict[str, Any]:
         "files_checked": len(inputs),
         "records": records,
         "collection_results": collection_results,
+        "counts_scope": "parseable_records_only",
+        "ok_records": ok_records,
+        "error_records": error_records,
+        "channel_counts": channel_counts,
+        "operation_counts": operation_counts,
+        "error_codes": error_codes,
+        "missing_metadata": {
+            **missing_metadata_counts,
+            "samples": missing_metadata_samples,
+        },
         "items_seen": items_seen,
         "empty_lines": empty_lines,
         "invalid_lines": invalid_line_count,
@@ -346,6 +434,8 @@ def validate_ledger_input(input_path: str | Path) -> dict[str, Any]:
         "invalid_record_samples": invalid_records,
         "large_text_threshold": _LARGE_TEXT_CHARS,
         "large_text_fields": large_text_fields,
+        "large_raw_payload_threshold": _LARGE_RAW_CHARS,
+        "large_raw_payloads": large_raw_payloads,
     }
 
 
@@ -419,6 +509,27 @@ def _is_collection_result(value: object) -> bool:
 def _ensure_parent_dir(path: Path) -> None:
     if path.parent != Path("."):
         path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _jsonl_record_text(record: EvidenceLedgerRecord | dict[str, Any]) -> str:
+    return _escape_jsonl_line_separators(json.dumps(record, ensure_ascii=False))
+
+
+def _escape_jsonl_line_separators(text: str) -> str:
+    for char, replacement in _JSONL_UNSAFE_LINE_SEPARATORS.items():
+        text = text.replace(char, replacement)
+    return text
+
+
+def _raw_payload_length(raw_payload: Any) -> int:
+    if raw_payload is None:
+        return 0
+    if isinstance(raw_payload, str):
+        return len(raw_payload)
+    try:
+        return len(json.dumps(raw_payload, ensure_ascii=False))
+    except (TypeError, ValueError):
+        return len(str(raw_payload))
 
 
 def _resolved_path(path: str | Path | None) -> Path | None:

@@ -14,6 +14,7 @@ from agent_reach.ledger import (
     save_collection_result,
     save_collection_result_sharded,
     shard_ledger_path,
+    validate_ledger_input,
 )
 from agent_reach.results import build_error, build_item, build_result
 
@@ -116,6 +117,25 @@ def test_append_ledger_record_writes_jsonl(tmp_path):
     assert json.loads(lines[1])["error_code"] == "unknown_channel"
 
 
+def test_append_ledger_record_escapes_unicode_line_separators(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    payload = _success_result()
+    payload["items"][0]["text"] = "alpha\u2028beta\u2029gamma\u0085delta"
+    record = build_ledger_record(payload, run_id="run-1")
+
+    append_ledger_record(path, record)
+
+    text = path.read_text(encoding="utf-8")
+    assert "\u2028" not in text
+    assert "\u2029" not in text
+    assert "\u0085" not in text
+    assert "\\u2028" in text
+    assert "\\u2029" in text
+    assert "\\u0085" in text
+    assert path.read_bytes().count(b"\n") == 1
+    assert json.loads(text)["result"]["items"][0]["text"] == "alpha\u2028beta\u2029gamma\u0085delta"
+
+
 def test_save_collection_result_surfaces_invalid_path(tmp_path):
     directory_path = tmp_path / "already-a-directory"
     directory_path.mkdir()
@@ -177,3 +197,75 @@ def test_merge_ledger_inputs_combines_shards(tmp_path):
     assert payload["files_merged"] == 2
     assert payload["records_written"] == 2
     assert payload["inputs"][0].endswith("rss.jsonl")
+
+
+def test_merge_ledger_inputs_preserves_unicode_line_separator_records(tmp_path):
+    source_dir = tmp_path / "ledger"
+    source_dir.mkdir()
+    record = build_ledger_record(_success_result(), run_id="run-1")
+    record["result"]["items"][0]["text"] = "alpha\u2028beta"
+    (source_dir / "web.jsonl").write_text(
+        json.dumps(record, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "merged.jsonl"
+
+    payload = merge_ledger_inputs(source_dir, output_path)
+
+    assert payload["records_written"] == 1
+    assert output_path.read_bytes().count(b"\n") == 1
+    output_text = output_path.read_text(encoding="utf-8")
+    assert "\\u2028" in output_text
+    assert json.loads(output_text)["result"]["items"][0]["text"] == "alpha\u2028beta"
+
+
+def test_validate_ledger_input_handles_unicode_line_separator_records(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    record = build_ledger_record(_success_result(), run_id="run-1")
+    record["result"]["items"][0]["text"] = "alpha\u2028beta"
+    path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    payload = validate_ledger_input(path)
+
+    assert payload["valid"] is True
+    assert payload["records"] == 1
+    assert payload["collection_results"] == 1
+    assert payload["items_seen"] == 1
+    assert payload["invalid_lines"] == 0
+
+
+def test_validate_ledger_input_reports_diagnostics(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    missing_metadata = build_ledger_record(_success_result(), run_id="run-1")
+    oversized_raw_error = build_ledger_record(
+        _error_result(),
+        run_id="run-1",
+        intent="external_smoke",
+        query_id="github-missing",
+        source_role="repo_anchor",
+    )
+    oversized_raw_error["result"]["raw"] = "x" * 100_001
+    path.write_text(
+        "".join(
+            json.dumps(record, ensure_ascii=False) + "\n"
+            for record in (missing_metadata, oversized_raw_error)
+        ),
+        encoding="utf-8",
+    )
+
+    payload = validate_ledger_input(path)
+
+    assert payload["valid"] is True
+    assert payload["counts_scope"] == "parseable_records_only"
+    assert payload["ok_records"] == 1
+    assert payload["error_records"] == 1
+    assert payload["channel_counts"] == {"web": 1, "github": 1}
+    assert payload["operation_counts"] == {"read": 2}
+    assert payload["error_codes"] == {"unknown_channel": 1}
+    assert payload["missing_metadata"]["intent"] == 1
+    assert payload["missing_metadata"]["query_id"] == 1
+    assert payload["missing_metadata"]["source_role"] == 1
+    assert payload["missing_metadata"]["samples"][0]["channel"] == "web"
+    assert payload["large_raw_payload_threshold"] == 100_000
+    assert payload["large_raw_payloads"][0]["channel"] == "github"
+    assert payload["large_raw_payloads"][0]["raw_length"] == 100_001

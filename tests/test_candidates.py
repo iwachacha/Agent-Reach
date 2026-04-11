@@ -146,6 +146,19 @@ def test_candidates_invalid_jsonl_reports_error(tmp_path):
         build_candidates_payload(path)
 
 
+def test_candidates_handles_unicode_line_separator_in_record(tmp_path):
+    path = tmp_path / "evidence.jsonl"
+    item = _item("1", "https://example.com/1", "One")
+    item["text"] = "alpha\u2028beta"
+    result = _result(items=[item])
+    _write_jsonl(path, [build_ledger_record(result, run_id="run-1")])
+
+    payload = build_candidates_payload(path, by="url", limit=20)
+
+    assert payload["summary"]["candidate_count"] == 1
+    assert payload["candidates"][0]["text"] == "alpha\u2028beta"
+
+
 def test_candidates_accept_raw_collection_result_jsonl(tmp_path):
     path = tmp_path / "raw-results.jsonl"
     result = _result(items=[_item("raw-1", "https://example.com/raw", "Raw")])

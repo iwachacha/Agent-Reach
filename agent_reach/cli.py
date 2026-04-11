@@ -1159,6 +1159,9 @@ def _cmd_plan_candidates(args) -> int:
             fields=args.fields,
         )
     except CandidatePlanError as exc:
+        if args.json:
+            _print_json(_candidate_error_payload(args, str(exc)))
+            return 2
         print(f"Could not plan candidates: {exc}", file=sys.stderr)
         return 2
 
@@ -1167,6 +1170,28 @@ def _cmd_plan_candidates(args) -> int:
     else:
         print(render_candidates_text(payload))
     return 0
+
+
+def _candidate_error_payload(args, message: str) -> dict:
+    fields = None
+    if args.fields is not None:
+        fields = [item.strip() for item in args.fields.split(",") if item.strip()]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": utc_timestamp(),
+        "command": "plan candidates",
+        "ok": False,
+        "input": args.input,
+        "by": args.by,
+        "limit": args.limit,
+        "summary_only": bool(args.summary_only),
+        "fields": fields,
+        "candidates": [],
+        "error": {
+            "code": "candidate_plan_error",
+            "message": message,
+        },
+    }
 
 
 def _cmd_scout(args) -> int:

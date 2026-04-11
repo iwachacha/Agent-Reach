@@ -836,8 +836,14 @@ class TestCLI:
             == 2
         )
         captured = capsys.readouterr()
-        assert captured.out == ""
-        assert "Unsupported candidate field" in captured.err
+        payload = json.loads(captured.out)
+        assert payload["ok"] is False
+        assert payload["command"] == "plan candidates"
+        assert payload["fields"] == ["title", "nope"]
+        assert payload["candidates"] == []
+        assert payload["error"]["code"] == "candidate_plan_error"
+        assert "Unsupported candidate field" in payload["error"]["message"]
+        assert captured.err == ""
 
     def test_plan_candidates_text(self, capsys, tmp_path):
         ledger_path = tmp_path / "evidence.jsonl"
@@ -875,8 +881,43 @@ class TestCLI:
 
         assert main(["plan", "candidates", "--input", str(missing_path), "--json"]) == 2
         captured = capsys.readouterr()
-        assert captured.out == ""
-        assert "Could not plan candidates" in captured.err
+        payload = json.loads(captured.out)
+        assert payload["ok"] is False
+        assert payload["input"] == str(missing_path)
+        assert payload["by"] == "url"
+        assert payload["limit"] == 20
+        assert payload["summary_only"] is False
+        assert payload["fields"] is None
+        assert payload["candidates"] == []
+        assert payload["error"]["code"] == "candidate_plan_error"
+        assert "Could not read evidence input" in payload["error"]["message"]
+        assert captured.err == ""
+
+    def test_plan_candidates_invalid_jsonl_json_returns_error_envelope(self, capsys, tmp_path):
+        ledger_path = tmp_path / "evidence.jsonl"
+        ledger_path.write_text("{broken\n", encoding="utf-8")
+
+        assert (
+            main(
+                [
+                    "plan",
+                    "candidates",
+                    "--input",
+                    str(ledger_path),
+                    "--summary-only",
+                    "--json",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        payload = json.loads(captured.out)
+        assert payload["ok"] is False
+        assert payload["summary_only"] is True
+        assert payload["candidates"] == []
+        assert payload["error"]["code"] == "candidate_plan_error"
+        assert "Invalid JSONL" in payload["error"]["message"]
+        assert captured.err == ""
 
     def test_plan_candidates_invalid_limit_returns_exit_2(self, capsys, tmp_path):
         ledger_path = tmp_path / "evidence.jsonl"
