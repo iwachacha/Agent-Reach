@@ -13,14 +13,19 @@ from agent_reach.channels import get_all_channel_contracts
 from agent_reach.schemas import SCHEMA_VERSION, utc_timestamp
 
 EXA_SERVER_URL = "https://mcp.exa.ai/mcp"
+PACKAGED_SKILL_NAMES = (
+    "agent-reach",
+    "agent-reach-shape-brief",
+    "agent-reach-orchestrate",
+)
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _packaged_skill_source() -> Path:
-    return Path(__file__).resolve().parents[1] / "skill"
+def packaged_skill_source() -> Path:
+    return Path(__file__).resolve().parents[1] / "skills"
 
 
 def _current_working_dir() -> Path:
@@ -35,6 +40,14 @@ def _candidate_skill_roots() -> list[Path]:
     roots.append(Path.home() / ".codex" / "skills")
     roots.append(Path.home() / ".agents" / "skills")
     return roots
+
+
+def _candidate_skill_targets() -> list[Path]:
+    targets: list[Path] = []
+    for root in _candidate_skill_roots():
+        for skill_name in PACKAGED_SKILL_NAMES:
+            targets.append(root / skill_name)
+    return targets
 
 
 def _required_commands(channels: list[dict]) -> list[str]:
@@ -110,7 +123,7 @@ def _default_plugin_manifest(skill_source: str, mcp_config_path: str) -> dict[st
     return {
         "name": "agent-reach",
         "version": __version__,
-        "description": "Windows-first research integration substrate for Codex and similar agents.",
+        "description": "Windows-first research integration and orchestration suite for Codex.",
         "author": {
             "name": "Neo Reid",
         },
@@ -127,10 +140,10 @@ def _default_plugin_manifest(skill_source: str, mcp_config_path: str) -> dict[st
         "mcpServers": mcp_config_path,
         "interface": {
             "displayName": "Agent Reach",
-            "shortDescription": "Windows/Codex research integration substrate",
+            "shortDescription": "Windows/Codex research integration and orchestration",
             "longDescription": (
                 "Bootstraps, documents, diagnoses, and exposes thin read-only collection "
-                "for downstream Codex workflows on Windows."
+                "plus in-session orchestration skills for downstream Codex research workflows on Windows."
             ),
             "developerName": "Neo Reid",
             "category": "Developer Tools",
@@ -138,16 +151,12 @@ def _default_plugin_manifest(skill_source: str, mcp_config_path: str) -> dict[st
                 "Readiness",
                 "Registry",
                 "Collection",
+                "Orchestration",
             ],
             "defaultPrompt": [
                 "Show me which research channels are ready on this Windows machine.",
-                "Export the Codex integration settings for Agent Reach.",
-                "List the supported channels and their setup requirements.",
-                (
-                    "Run a read-only collection using the live channel contract, including web, Exa, "
-                    "GitHub, Hatena Bookmark, Bluesky, Qiita, YouTube, RSS, SearXNG, Crawl4AI, "
-                    "Hacker News, MCP Registry, Reddit, or optional Twitter/X."
-                ),
+                "Turn this rough research request into a structured Agent Reach brief.",
+                "Take this rough research ask, decide whether one intake subagent is worth using, and start the Agent Reach investigation.",
             ],
             "brandColor": "#0F766E",
         },
@@ -184,8 +193,13 @@ def _mcp_config_inline(repo_root: Path) -> dict[str, Any]:
 def _documentation_summary() -> list[str]:
     return [
         "Install the latest fork build from `git+https://github.com/iwachacha/Agent-Reach.git` or pin a commit/ref when reproducibility matters.",
+        "`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, and `agent-reach-orchestrate`.",
         "Use `agent-reach collect --json` as the primary external interface in arbitrary projects.",
         "Let the calling workflow choose request scale, channels, pagination, ranking, summarization, and posting; Agent Reach exposes capabilities but does not choose scope for the caller.",
+        "Use `agent-reach-shape-brief` to normalize vague requests into a fixed research brief before execution when the request is underspecified.",
+        "Use `agent-reach-orchestrate` to move a rough or structured ask to actual Agent Reach collection start in the same session.",
+        "For most rough asks, `agent-reach-orchestrate` is the default entrypoint; use `agent-reach-shape-brief` only when you want to stop before collection starts.",
+        "Use at most one brief-shaping subagent per request, and only when intake ambiguity would materially change the research route.",
         "Inspect `agent-reach channels --json` operation contracts before choosing per-channel options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until` downstream.",
         "Add `--save .agent-reach/evidence.jsonl` when a research run needs an auditable raw CollectionResult ledger.",
         "Use `agent-reach ledger validate --input .agent-reach/evidence.jsonl --json` before treating saved evidence as a CI artifact.",
@@ -224,8 +238,8 @@ def _external_project_usage() -> dict[str, Any]:
                 "agent-reach doctor --json --probe",
             ],
             "notes": [
-                "The skill install writes to the user's Codex skill home, not to the downstream project.",
-                "Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files when using the CLI.",
+                "The skill install writes the bundled skill suite to the user's Codex skill home, not to the downstream project.",
+                "Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` files when using the CLI.",
                 "After pushing a custom ref, refresh the global install with `uv tool install --force git+<remote-url>@<ref>` and rerun `agent-reach skill --install`.",
             ],
         },
@@ -317,7 +331,7 @@ def _codex_runtime_policy() -> dict[str, Any]:
     return {
         "default_interface": "agent-reach collect --json",
         "no_copy_rule": (
-            "Use the globally installed CLI and skill. Do not copy `.codex-plugin`, `.mcp.json`, "
+            "Use the globally installed CLI and skill suite. Do not copy `.codex-plugin`, `.mcp.json`, "
             "or Agent Reach source files into a downstream repository unless the user explicitly asks for repo-local artifacts."
         ),
         "decision_order": [
@@ -350,7 +364,7 @@ def export_codex_integration() -> dict[str, Any]:
     execution_context = _execution_context(repo_root)
     artifact_paths = _artifact_paths(repo_root)
     channels = get_all_channel_contracts()
-    skill_source = str(_packaged_skill_source())
+    skill_source = str(packaged_skill_source())
     suggested_destinations = _suggested_destinations(execution_context, repo_root)
 
     return {
@@ -369,7 +383,8 @@ def export_codex_integration() -> dict[str, Any]:
         "required_commands": _required_commands(channels),
         "skill": {
             "source": skill_source,
-            "targets": [str(root / "agent-reach") for root in _candidate_skill_roots()],
+            "names": list(PACKAGED_SKILL_NAMES),
+            "targets": [str(path) for path in _candidate_skill_targets()],
         },
         "plugin_manifest": _existing_path(artifact_paths["plugin_manifest"]),
         "plugin_manifest_inline": _plugin_manifest_inline(

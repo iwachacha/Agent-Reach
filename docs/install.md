@@ -12,6 +12,8 @@ agent-reach skill --install
 agent-reach version
 ```
 
+`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, and `agent-reach-orchestrate`.
+
 To pin a specific build, install an exact commit or ref:
 
 ```powershell

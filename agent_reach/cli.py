@@ -23,6 +23,7 @@ from agent_reach.candidates import (
 )
 from agent_reach.client import AgentReachClient
 from agent_reach.config import normalize_searxng_base_url
+from agent_reach.integrations.codex import PACKAGED_SKILL_NAMES, packaged_skill_source
 from agent_reach.ledger import (
     append_result_json,
     default_run_id,
@@ -332,7 +333,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Remove skill files only and keep ~/.agent-reach",
     )
 
-    p_skill = sub.add_parser("skill", help="Install or remove the bundled skill files")
+    p_skill = sub.add_parser("skill", help="Install or remove the bundled skill suite")
     skill_group = p_skill.add_mutually_exclusive_group(required=True)
     skill_group.add_argument("--install", action="store_true", help="Install the bundled skill")
     skill_group.add_argument("--uninstall", action="store_true", help="Remove the bundled skill")
@@ -421,7 +422,7 @@ def _build_install_plan_payload(
         "core_channels": list(CORE_CHANNELS),
         "optional_channels_requested": list(requested_channels),
         "commands": _manual_install_commands(requested_channels),
-        "skill_targets": [str(root / "agent-reach") for root in _candidate_skill_roots()],
+        "skill_targets": [str(root / skill_name) for root in _candidate_skill_roots() for skill_name in PACKAGED_SKILL_NAMES],
         "execution_context": integration["execution_context"],
         "plugin_manifest": integration["plugin_manifest"],
         "plugin_manifest_inline": integration["plugin_manifest_inline"],
@@ -854,7 +855,7 @@ def _candidate_skill_roots() -> List[Path]:
 
 
 def _install_skill() -> List[Path]:
-    source_dir = Path(__file__).resolve().parent / "skill"
+    source_dir = packaged_skill_source()
     installed_paths: List[Path] = []
 
     existing_roots = [root for root in _candidate_skill_roots() if root.exists()]
@@ -862,12 +863,13 @@ def _install_skill() -> List[Path]:
         existing_roots = [_candidate_skill_roots()[0]]
 
     for root in existing_roots:
-        target = root / "agent-reach"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            shutil.rmtree(target)
-        shutil.copytree(source_dir, target)
-        installed_paths.append(target)
+        root.mkdir(parents=True, exist_ok=True)
+        for skill_name in PACKAGED_SKILL_NAMES:
+            target = root / skill_name
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(source_dir / skill_name, target)
+            installed_paths.append(target)
 
     return installed_paths
 
@@ -875,10 +877,11 @@ def _install_skill() -> List[Path]:
 def _uninstall_skill() -> List[Path]:
     removed: List[Path] = []
     for root in _candidate_skill_roots():
-        target = root / "agent-reach"
-        if target.exists():
-            shutil.rmtree(target)
-            removed.append(target)
+        for skill_name in PACKAGED_SKILL_NAMES:
+            target = root / skill_name
+            if target.exists():
+                shutil.rmtree(target)
+                removed.append(target)
     return removed
 
 
@@ -1495,7 +1498,7 @@ def _cmd_uninstall(args) -> int:
 
     config_path = Config.CONFIG_FILE
     config_dir = Config.CONFIG_DIR
-    skill_paths = [root / "agent-reach" for root in _candidate_skill_roots()]
+    skill_paths = [root / skill_name for root in _candidate_skill_roots() for skill_name in PACKAGED_SKILL_NAMES]
 
     if args.dry_run:
         print("Dry-run uninstall plan:")

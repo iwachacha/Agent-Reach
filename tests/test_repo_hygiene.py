@@ -67,8 +67,8 @@ def test_caller_control_policy_is_documented_consistently():
     files = {
         "readme": repo_root / "README.md",
         "downstream": repo_root / "docs" / "downstream-usage.md",
-        "skill": repo_root / "agent_reach" / "skill" / "SKILL.md",
-        "agent_prompt": repo_root / "agent_reach" / "skill" / "agents" / "openai.yaml",
+        "skill": repo_root / "agent_reach" / "skills" / "agent-reach" / "SKILL.md",
+        "agent_prompt": repo_root / "agent_reach" / "skills" / "agent-reach" / "agents" / "openai.yaml",
     }
 
     texts = {name: path.read_text(encoding="utf-8") for name, path in files.items()}
@@ -90,3 +90,18 @@ def test_caller_control_policy_is_documented_consistently():
 
     assert "does not choose scope" in texts["agent_prompt"]
     assert "explicit opt-in" in texts["agent_prompt"]
+
+
+def test_skill_suite_files_exist():
+    repo_root = _repo_root()
+    suite_root = repo_root / "agent_reach" / "skills"
+    expected = [
+        "agent-reach",
+        "agent-reach-shape-brief",
+        "agent-reach-orchestrate",
+    ]
+
+    for skill_name in expected:
+        skill_dir = suite_root / skill_name
+        assert (skill_dir / "SKILL.md").exists()
+        assert (skill_dir / "agents" / "openai.yaml").exists()

@@ -23,7 +23,7 @@ Do not assume this fork chooses investigation scope. The caller chooses scale, r
 ## Operating Rules For Codex
 
 - Default to the globally installed `agent-reach` CLI in any downstream repository.
-- Do not ask the user to copy `.codex-plugin`, `.mcp.json`, `agent_reach/skill`, or Agent Reach source files into the downstream repository unless they explicitly ask for repo-local plugin artifacts.
+- Do not ask the user to copy `.codex-plugin`, `.mcp.json`, `agent_reach/skills`, or Agent Reach source files into the downstream repository unless they explicitly ask for repo-local plugin artifacts.
 - Use `agent-reach collect --json` as the stable handoff. Preserve the returned `CollectionResult` JSON when another system will rank, summarize, dedupe, or publish it.
 - Keep lightweight asks lightweight. Do not auto-escalate a narrow request into large-scale research.
 - Inspect `agent-reach channels --json` `operation_contracts` before choosing per-channel options such as `page_size`, `max_pages`, `cursor`, `page`, `since`, or `until`.

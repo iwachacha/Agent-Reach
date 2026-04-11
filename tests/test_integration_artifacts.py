@@ -19,10 +19,12 @@ def test_codex_plugin_manifest_exists_and_is_valid():
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["name"] == "agent-reach"
-    assert manifest["skills"] == "../agent_reach/skill"
+    assert manifest["skills"] == "../agent_reach/skills"
     assert manifest["mcpServers"] == "../.mcp.json"
     assert manifest["interface"]["displayName"] == "Agent Reach"
     assert "Collection" in manifest["interface"]["capabilities"]
+    assert "Orchestration" in manifest["interface"]["capabilities"]
+    assert len(manifest["interface"]["defaultPrompt"]) == 3
 
 
 def test_mcp_config_contains_exa():
@@ -111,6 +113,11 @@ def test_export_points_at_existing_checkout_artifacts():
     assert channel_contracts["reddit"]["required_commands"] == ["rdt"]
     assert channel_contracts["hacker_news"]["operations"][0] == "search"
     assert channel_contracts["mcp_registry"]["operations"] == ["search", "read"]
+    assert payload["skill"]["names"] == [
+        "agent-reach",
+        "agent-reach-shape-brief",
+        "agent-reach-orchestrate",
+    ]
     assert payload["skill"]["targets"]
     assert Path(payload["skill"]["source"]).exists()
     assert payload["python_sdk"]["availability"] == "project_env_only"
@@ -149,6 +156,11 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
     assert payload["plugin_manifest_inline"]["skills"] == payload["skill"]["source"]
     assert payload["plugin_manifest_inline"]["mcpServers"] == "../.mcp.json"
     assert payload["mcp_config_inline"]["mcpServers"]["exa"]["url"] == "https://mcp.exa.ai/mcp"
+    assert payload["skill"]["names"] == [
+        "agent-reach",
+        "agent-reach-shape-brief",
+        "agent-reach-orchestrate",
+    ]
     plugin_destination = Path(payload["suggested_destinations"]["plugin_manifest"])
     mcp_destination = Path(payload["suggested_destinations"]["mcp_config"])
     assert plugin_destination.parts[-2:] == (".codex-plugin", "plugin.json")

@@ -10,7 +10,8 @@ Agent Reach is a Windows-first integration layer for research tooling. It expose
 - a thin read-only collector through `agent-reach collect --json`
 - ledger validation and append helpers through `agent-reach ledger validate --json` and `agent-reach ledger append --json`
 - a non-mutating Codex export through `agent-reach export-integration --client codex`
-- repo-local Codex artifacts through `.codex-plugin/plugin.json` and `.mcp.json` when running from a source checkout
+- bundled Codex skills for diagnostics, brief shaping, and in-session orchestration
+- repo-local Codex artifacts through `.codex-plugin/plugin.json`, `.mcp.json`, and `agent_reach/skills/` when running from a source checkout
 
 ## Recommended flow
 
@@ -44,7 +45,19 @@ agent-reach skill --install
 agent-reach version
 ```
 
-After that, Codex can call `agent-reach collect --json` from any working directory. The downstream project does not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files unless it explicitly wants repo-local plugin artifacts.
+After that, Codex can call `agent-reach collect --json` from any working directory. The downstream project does not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` files unless it explicitly wants repo-local plugin artifacts.
+
+`agent-reach skill --install` installs the bundled skill suite:
+
+- `agent-reach`
+- `agent-reach-shape-brief`
+- `agent-reach-orchestrate`
+
+Use `agent-reach-shape-brief` when a research ask is still underspecified and you want a fixed brief before execution. Use `agent-reach-orchestrate` when you want the same Codex session to move from intake to actual Agent Reach collection start.
+
+For most rough asks, `agent-reach-orchestrate` is the default entrypoint. Reach for `agent-reach-shape-brief` only when you want to stop before collection starts.
+
+Subagents are optional and conservative in this model. If delegation is available and authorized, use at most one intake-only subagent to shape a vague ask into an executable brief. Keep `channels --json`, `doctor --json`, channel choice, collection start, and final synthesis on the main agent.
 
 `export-integration --format json` also includes `codex_runtime_policy`, which is the machine-readable version of this rule set. Downstream setup tools should prefer `agent-reach collect --json`, should not vendor Agent Reach files by default, and should treat large-scale research as explicit opt-in rather than auto-escalating lightweight asks.
 

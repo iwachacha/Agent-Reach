@@ -1,7 +1,7 @@
 {
   "name": "agent-reach",
   "version": "1.6.0",
-  "description": "Windows-first research integration substrate for Codex and similar agents.",
+  "description": "Windows-first research integration and orchestration suite for Codex.",
   "author": {
     "name": "Neo Reid"
   },
@@ -14,24 +14,24 @@
     "diagnostics",
     "integration"
   ],
-  "skills": "../agent_reach/skill",
+  "skills": "../agent_reach/skills",
   "mcpServers": "../.mcp.json",
   "interface": {
     "displayName": "Agent Reach",
-    "shortDescription": "Windows/Codex research integration substrate",
-    "longDescription": "Bootstraps, documents, diagnoses, and exposes thin read-only collection for downstream Codex workflows on Windows.",
+    "shortDescription": "Windows/Codex research integration and orchestration",
+    "longDescription": "Bootstraps, documents, diagnoses, and exposes thin read-only collection plus in-session orchestration skills for downstream Codex research workflows on Windows.",
     "developerName": "Neo Reid",
     "category": "Developer Tools",
     "capabilities": [
       "Readiness",
       "Registry",
-      "Collection"
+      "Collection",
+      "Orchestration"
     ],
     "defaultPrompt": [
       "Show me which research channels are ready on this Windows machine.",
-      "Export the Codex integration settings for Agent Reach.",
-      "List the supported channels and their setup requirements.",
-      "Run a read-only collection using the live channel contract, including web, Exa, GitHub, Hatena Bookmark, Bluesky, Qiita, YouTube, RSS, SearXNG, Crawl4AI, Hacker News, MCP Registry, Reddit, or optional Twitter/X."
+      "Turn this rough research request into a structured Agent Reach brief.",
+      "Take this rough research ask, decide whether one intake subagent is worth using, and start the Agent Reach investigation."
     ],
     "brandColor": "#0F766E"
   }

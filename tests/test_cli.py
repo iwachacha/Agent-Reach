@@ -1829,6 +1829,11 @@ class TestCLI:
         assert payload["execution_context"] == "checkout"
         assert payload["mcp_snippet"]["mcpServers"]["exa"]["url"] == "https://mcp.exa.ai/mcp"
         assert payload["python_sdk"]["availability"] == "project_env_only"
+        assert payload["skill"]["names"] == [
+            "agent-reach",
+            "agent-reach-shape-brief",
+            "agent-reach-orchestrate",
+        ]
         channel_contracts = {channel["name"]: channel for channel in payload["channels"]}
         assert channel_contracts["qiita"]["operation_contracts"]["search"]["options"][0]["name"] == "body_mode"
 

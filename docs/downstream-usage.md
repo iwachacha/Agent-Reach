@@ -19,6 +19,8 @@ agent-reach version
 agent-reach doctor --json --probe
 ```
 
+`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, and `agent-reach-orchestrate`.
+
 When you need an exact build, pin a commit or ref instead of relying on upstream release tags:
 
 ```powershell
@@ -55,7 +57,7 @@ agent-reach ledger validate --input .agent-reach/evidence.jsonl --json
 agent-reach plan candidates --input .agent-reach/evidence.jsonl --by url --limit 20 --json
 ```
 
-This does not require `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files inside the downstream project.
+This does not require `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` files inside the downstream project.
 
 `agent-reach check-update --json` compares this fork to upstream `Panniantong/Agent-Reach` releases. Treat it as upstream awareness, not as the source of truth for the latest fork commit.
 
@@ -73,6 +75,9 @@ When Codex is working inside an arbitrary project:
 
 - Use the globally installed `agent-reach` CLI by default.
 - Do not copy Agent Reach repo files into the project unless the user explicitly asks for repo-local plugin artifacts.
+- Use `agent-reach-shape-brief` to normalize vague research asks when needed.
+- Use `agent-reach-orchestrate` when the user wants to go from a rough ask to actual Agent Reach collection start in the same session.
+- If delegation is available and explicitly allowed, use at most one intake-only subagent when ambiguity would materially change the research route.
 - Agent Reach does not choose request scale, investigation routes, source mix, ranking, summarization, or posting.
 - The caller chooses scope. Do not auto-escalate a lightweight request into large-scale research.
 - Use `agent-reach collect --json` as the stable handoff to project code.

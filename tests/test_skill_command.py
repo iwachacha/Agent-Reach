@@ -2,6 +2,7 @@
 """Tests for skill install and uninstall helpers."""
 
 from agent_reach.cli import _candidate_skill_roots, _install_skill, _uninstall_skill
+from agent_reach.integrations.codex import PACKAGED_SKILL_NAMES
 
 
 def test_install_skill_prefers_codex_home(monkeypatch, tmp_path):
@@ -11,24 +12,29 @@ def test_install_skill_prefers_codex_home(monkeypatch, tmp_path):
 
     installed = _install_skill()
 
-    target = codex_home / "skills" / "agent-reach"
-    assert target in installed
-    assert (target / "SKILL.md").exists()
-    assert (target / "agents" / "openai.yaml").exists()
+    expected = [codex_home / "skills" / skill_name for skill_name in PACKAGED_SKILL_NAMES]
+    assert installed == expected
+    for target in expected:
+        assert (target / "SKILL.md").exists()
+        assert (target / "agents" / "openai.yaml").exists()
 
 
 def test_uninstall_skill_removes_known_locations(monkeypatch, tmp_path):
     monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.setattr("agent_reach.cli.Path.home", lambda: tmp_path)
 
-    target = tmp_path / ".codex" / "skills" / "agent-reach"
-    target.mkdir(parents=True)
-    (target / "SKILL.md").write_text("test", encoding="utf-8")
+    targets = []
+    for skill_name in PACKAGED_SKILL_NAMES:
+        target = tmp_path / ".codex" / "skills" / skill_name
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text("test", encoding="utf-8")
+        targets.append(target)
 
     removed = _uninstall_skill()
 
-    assert target in removed
-    assert not target.exists()
+    assert removed == targets
+    for target in targets:
+        assert not target.exists()
 
 
 def test_candidate_skill_roots_do_not_include_legacy_agent_dirs(monkeypatch, tmp_path):

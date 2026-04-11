@@ -9,6 +9,14 @@ Agent Reach is intentionally narrow. It helps other tools collect information sa
 - provide readiness diagnostics and integration exports
 - offer a thin read-only collection surface for external apps, bots, and CI jobs
 
+It also ships a bundled Codex skill suite for orchestration around that collection surface:
+
+- `agent-reach`: diagnostics, channel discovery, and read-only collection guidance
+- `agent-reach-shape-brief`: turn rough research asks into a fixed brief
+- `agent-reach-orchestrate`: take a rough ask, optionally use one intake subagent when it is actually worth it, and start the Agent Reach investigation in-session
+
+For most rough research asks, start with `agent-reach-orchestrate`. Use `agent-reach-shape-brief` only when you explicitly want to stop at brief formation before collection.
+
 ## Current channel surface
 
 Core channels:
@@ -105,7 +113,7 @@ External projects do not need to vendor this repo. Use one of these patterns:
 - Python apps that intentionally depend on the package: `AgentReachClient`
 - GitHub Actions: `iwachacha/Agent-Reach/.github/actions/setup-agent-reach@main`
 
-Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skill` files when they are using the CLI.
+Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` files when they are using the CLI.
 
 ## Caller-Control Policy
 
@@ -130,6 +138,6 @@ Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/sk
 
 - Downstream examples live under `examples/`
 - GitHub Actions smoke validation lives at `.github/workflows/agent-reach-smoke.yml`
-- Repo-local integration artifacts are `.codex-plugin/plugin.json`, `.mcp.json`, and `agent_reach/skill/`
+- Repo-local integration artifacts are `.codex-plugin/plugin.json`, `.mcp.json`, and `agent_reach/skills/`
 
 In tool installs, `export-integration` falls back to inline payloads and suggested destinations instead of returning dead checkout paths.
