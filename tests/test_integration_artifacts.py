@@ -19,12 +19,15 @@ def test_codex_plugin_manifest_exists_and_is_valid():
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["name"] == "agent-reach"
+    assert manifest["description"].startswith("Explicit-opt-in")
     assert manifest["skills"] == "../agent_reach/skills"
     assert manifest["mcpServers"] == "../.mcp.json"
     assert manifest["interface"]["displayName"] == "Agent Reach"
     assert "Collection" in manifest["interface"]["capabilities"]
     assert "Orchestration" in manifest["interface"]["capabilities"]
-    assert len(manifest["interface"]["defaultPrompt"]) == 3
+    assert len(manifest["interface"]["defaultPrompt"]) == 4
+    assert all(prompt.startswith("Using Agent Reach") for prompt in manifest["interface"]["defaultPrompt"])
+    assert any("bounded execution plan" in prompt for prompt in manifest["interface"]["defaultPrompt"])
 
 
 def test_mcp_config_contains_exa():
@@ -117,6 +120,7 @@ def test_export_points_at_existing_checkout_artifacts():
     assert payload["skill"]["names"] == [
         "agent-reach",
         "agent-reach-shape-brief",
+        "agent-reach-budgeted-research",
         "agent-reach-orchestrate",
         "agent-reach-propose-improvements",
         "agent-reach-maintain-proposals",
@@ -134,7 +138,12 @@ def test_export_points_at_existing_checkout_artifacts():
     assert payload["external_project_usage"]["copy_files_required"] is False
     assert payload["external_project_usage"]["preferred_interface"] == "agent-reach collect --json"
     assert payload["codex_runtime_policy"]["default_interface"] == "agent-reach collect --json"
+    activation_policy = payload["codex_runtime_policy"]["activation_policy"]
+    assert activation_policy["explicit_user_opt_in_only"] is True
+    assert "explicitly asks for Agent Reach" in activation_policy["rule"]
+    assert "native browsing/search" in activation_policy["light_search_fallback"]
     assert "Do not copy" in payload["codex_runtime_policy"]["no_copy_rule"]
+    assert any("explicitly asked for Agent Reach" in item for item in payload["codex_runtime_policy"]["decision_order"])
     request_scale_policy = payload["codex_runtime_policy"]["request_scale_policy"]
     assert request_scale_policy["single_collect"]["pattern"] == "single normalized collect or read"
     assert request_scale_policy["bounded_multi_source"]["pattern"] == "caller-chosen small multi-source collection"
@@ -161,6 +170,7 @@ def test_export_runtime_minimal_omits_bootstrap_payloads():
     assert payload["skill"]["names"] == [
         "agent-reach",
         "agent-reach-shape-brief",
+        "agent-reach-budgeted-research",
         "agent-reach-orchestrate",
         "agent-reach-propose-improvements",
         "agent-reach-maintain-proposals",
@@ -193,6 +203,7 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
     assert payload["skill"]["names"] == [
         "agent-reach",
         "agent-reach-shape-brief",
+        "agent-reach-budgeted-research",
         "agent-reach-orchestrate",
         "agent-reach-propose-improvements",
         "agent-reach-maintain-proposals",
@@ -204,6 +215,7 @@ def test_export_tool_install_omits_dead_paths(tmp_path):
     assert mcp_destination.name == ".mcp.json"
     assert payload["documentation_summary"]
     assert any("latest fork build" in item for item in payload["documentation_summary"])
+    assert any("native browsing/search" in item for item in payload["documentation_summary"])
     assert any("ledger validate" in item for item in payload["documentation_summary"])
     assert any("--require-channel" in item for item in payload["documentation_summary"])
     assert any("YouTube collection exposes" in item for item in payload["documentation_summary"])

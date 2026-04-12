@@ -23,10 +23,14 @@ Use this for verification, focused lookups, or one clear topic.
 Use this only when the user explicitly asks for wider coverage or provenance-heavy work.
 
 - start with 2-4 small discovery queries
-- save raw envelopes with `--save .agent-reach/evidence.jsonl`
+- choose an explicit artifact budget before collection starts
+- for machine-readable discovery handoffs, prefer `--raw-mode minimal|none`, `--item-text-mode snippet|none`, and a small `--item-text-max-chars`
+- prefer `--save-dir .agent-reach/shards` when multiple discovery commands will run, then merge before downstream ledger work
+- run `agent-reach ledger merge --input .agent-reach/shards --output .agent-reach/evidence.jsonl --json` before summary, query, or candidate planning
 - run `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json` when downstream automation needs neutral artifact health counts
 - run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json`
-- deep-read only selected URLs
+- deep-read only selected URLs after candidate gating
+- keep a small deep-read cap instead of summarizing everything collected
 - use `agent-reach batch --plan PLAN.json --validate-only --json` before any saved batch execution
 
 ## Collection-Start Guardrails

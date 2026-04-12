@@ -56,8 +56,10 @@ Research this broadly and keep an evidence trail I can review later.
 Good behavior:
 
 - explicitly mark this as a broad run
-- include `agent-reach collect --json --save .agent-reach/evidence.jsonl`
+- include compact discovery settings such as `--raw-mode none|minimal` and `--item-text-mode snippet|none`
+- prefer `agent-reach collect --json --save-dir .agent-reach/shards`
+- include `agent-reach ledger merge --input .agent-reach/shards --output .agent-reach/evidence.jsonl --json`
 - include `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json`
 - include `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json`
 - mention `agent-reach batch --plan PLAN.json --validate-only --json` before any saved batch execution
-- still deep-read only selected URLs
+- still deep-read only selected URLs and keep the shortlist small

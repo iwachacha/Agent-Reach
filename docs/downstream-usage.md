@@ -19,7 +19,14 @@ agent-reach version
 agent-reach doctor --json --probe
 ```
 
-`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, `agent-reach-orchestrate`, plus maintainer-only skills `agent-reach-propose-improvements`, `agent-reach-maintain-proposals`, and `agent-reach-maintain-release`.
+`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, `agent-reach-budgeted-research`, `agent-reach-orchestrate`, plus maintainer-only skills `agent-reach-propose-improvements`, `agent-reach-maintain-proposals`, and `agent-reach-maintain-release`.
+
+Use this quick entrypoint guide for explicit Agent Reach work:
+
+- `agent-reach`: diagnostics, contracts, and readiness checks
+- `agent-reach-shape-brief`: fixed research brief only
+- `agent-reach-budgeted-research`: bounded broad-run plan before collection
+- `agent-reach-orchestrate`: in-session collection start
 
 When you need an exact build, pin a commit or ref instead of relying on upstream release tags:
 
@@ -80,10 +87,13 @@ agent-reach ledger append --input live-results/result.json --output .agent-reach
 
 When Codex is working inside an arbitrary project:
 
-- Use the globally installed `agent-reach` CLI by default.
+- Use Agent Reach only when the user explicitly asks for Agent Reach or one of its bundled skills.
+- For ordinary lightweight searches or one-off web lookups, use Codex's built-in browsing/search instead of Agent Reach.
+- When Agent Reach is explicitly requested, use the globally installed `agent-reach` CLI.
 - Do not copy Agent Reach repo files into the project unless the user explicitly asks for repo-local plugin artifacts.
-- Use `agent-reach-shape-brief` to normalize vague research asks when needed.
-- Use `agent-reach-orchestrate` when the user wants to go from a rough ask to actual Agent Reach collection start in the same session.
+- Use `agent-reach-shape-brief` only when the user explicitly wants Agent Reach and needs a fixed brief before collection.
+- Use `agent-reach-budgeted-research` only when the user explicitly wants Agent Reach and the task is broad enough that artifact size, candidate breadth, or deep-read count should be fixed before collection.
+- Use `agent-reach-orchestrate` only when the user explicitly wants Agent Reach and wants to go from a rough ask to actual Agent Reach collection start in the same session.
 - The bundled suite also includes maintainer-only skills for Agent Reach repo work: `agent-reach-propose-improvements`, `agent-reach-maintain-proposals`, and `agent-reach-maintain-release`.
 - If delegation is available and explicitly allowed, use at most one intake-only subagent when ambiguity would materially change the research route.
 - Agent Reach does not choose request scale, investigation routes, source mix, ranking, summarization, or posting.

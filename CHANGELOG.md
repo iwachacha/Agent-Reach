@@ -4,6 +4,11 @@ All notable changes to this fork are documented here.
 
 ## Unreleased
 
+### Changed
+
+- narrowed bundled Codex skill guidance and exported runtime policy so Agent Reach is explicit opt-in and lightweight lookups stay on native browsing/search unless the user asks for Agent Reach
+- added a public budget-planning skill and tightened broad-run guidance so large Agent Reach investigations can stay compact before deep reads
+
 ## [1.12.0] - 2026-04-12
 
 ### Added

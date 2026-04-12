@@ -12,13 +12,21 @@ Agent Reach is intentionally narrow. It helps other tools collect information sa
 It also ships a bundled Codex skill suite for collection, orchestration, and maintainer workflows around that surface:
 
 - `agent-reach`: diagnostics, channel discovery, and read-only collection guidance
-- `agent-reach-shape-brief`: turn rough research asks into a fixed brief
-- `agent-reach-orchestrate`: take a rough ask, optionally use one intake subagent when it is actually worth it, and start the Agent Reach investigation in-session
+- `agent-reach-shape-brief`: when explicitly using Agent Reach, turn rough research asks into a fixed brief
+- `agent-reach-budgeted-research`: when explicitly using Agent Reach, turn broad or provenance-heavy asks into a bounded execution plan before collection
+- `agent-reach-orchestrate`: when explicitly using Agent Reach, take a rough ask, optionally use one intake subagent when it is actually worth it, and start the Agent Reach investigation in-session
 - `agent-reach-propose-improvements`: maintainer-only skill for turning raw external findings into a clean, policy-compatible shortlist before formal review
 - `agent-reach-maintain-proposals`: maintainer-only review skill for deciding adopt/reject/defer on a concrete Agent Reach proposal list before editing
 - `agent-reach-maintain-release`: maintainer-only shipping skill for approved Agent Reach changes, including push and exact-ref reinstall flows
 
-For most rough research asks, start with `agent-reach-orchestrate`. Use `agent-reach-shape-brief` only when you explicitly want to stop at brief formation before collection.
+Use these bundled Agent Reach skills only when the user explicitly asks for Agent Reach or names one of them. For lightweight searches and one-off web lookups, use the model's built-in browsing/search instead.
+
+Use this quick entrypoint guide for explicit Agent Reach work:
+
+- Need diagnostics, channel contracts, or readiness checks: `agent-reach`
+- Need a fixed research brief but not execution yet: `agent-reach-shape-brief`
+- Need a bounded broad-run plan before collection starts: `agent-reach-budgeted-research`
+- Need to start collection in-session now: `agent-reach-orchestrate`
 
 ## Current channel surface
 

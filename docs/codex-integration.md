@@ -53,20 +53,28 @@ After that, Codex can call `agent-reach collect --json` from any working directo
 
 - `agent-reach`
 - `agent-reach-shape-brief`
+- `agent-reach-budgeted-research`
 - `agent-reach-orchestrate`
 - `agent-reach-propose-improvements` (maintainer-only)
 - `agent-reach-maintain-proposals` (maintainer-only)
 - `agent-reach-maintain-release` (maintainer-only)
 
-Use `agent-reach-shape-brief` when a research ask is still underspecified and you want a fixed brief before execution. Use `agent-reach-orchestrate` when you want the same Codex session to move from intake to actual Agent Reach collection start.
+Use `agent-reach-shape-brief` only when the user explicitly wants Agent Reach and the ask is still underspecified enough that you want a fixed brief contract before execution. Use `agent-reach-budgeted-research` only when the user explicitly wants Agent Reach and the task is broad enough that artifact budgets and deep-read caps should be fixed before collection. Use `agent-reach-orchestrate` only when the user explicitly wants Agent Reach and wants the same Codex session to move from intake to actual Agent Reach collection start.
 
 The bundled suite also includes three maintainer-only skills for this repository itself: `agent-reach-propose-improvements` for turning raw external findings into a shortlist, `agent-reach-maintain-proposals` for formal review of a concrete proposal list, and `agent-reach-maintain-release` for approved change shipping.
 
-For most rough asks, `agent-reach-orchestrate` is the default entrypoint. Reach for `agent-reach-shape-brief` only when you want to stop before collection starts.
+Use these bundled skills only when the user explicitly asks for Agent Reach or names one of them. For ordinary lightweight web lookups, stay on Codex's built-in browsing/search instead of Agent Reach.
+
+Use this quick entrypoint guide for explicit Agent Reach work:
+
+- `agent-reach`: diagnostics, contracts, and readiness checks
+- `agent-reach-shape-brief`: fixed research brief only
+- `agent-reach-budgeted-research`: bounded broad-run plan before collection
+- `agent-reach-orchestrate`: in-session collection start
 
 Subagents are optional and conservative in this model. If delegation is available and authorized, use at most one intake-only subagent to shape a vague ask into an executable brief. Keep `channels --json`, `doctor --json`, channel choice, collection start, and final synthesis on the main agent.
 
-`export-integration --format json` also includes `codex_runtime_policy`, which is the machine-readable version of this rule set. Downstream setup tools should prefer `agent-reach collect --json`, should not vendor Agent Reach files by default, and should treat large-scale research as explicit opt-in rather than auto-escalating lightweight asks. Use `--profile runtime-minimal` when a downstream prompt, skill, or setup helper only needs compact runtime guidance; use the default full profile when bootstrap tooling also needs inline payloads, suggested destinations, or the full channel contract.
+`export-integration --format json` also includes `codex_runtime_policy`, which is the machine-readable version of this rule set. Downstream setup tools should treat Agent Reach as explicit user opt-in, should prefer built-in browsing/search for lightweight lookups, should prefer `agent-reach collect --json` once Agent Reach is chosen, and should treat large-scale research as explicit opt-in rather than auto-escalating lightweight asks. Use `--profile runtime-minimal` when a downstream prompt, skill, or setup helper only needs compact runtime guidance; use the default full profile when bootstrap tooling also needs inline payloads, suggested destinations, or the full channel contract.
 
 `collect --max-text-chars N` still only affects the human text renderer. When machine-readable output should carry less normalized item text, use `--item-text-mode snippet|none` and optionally `--item-text-max-chars N`.
 

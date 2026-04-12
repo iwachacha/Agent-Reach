@@ -16,6 +16,7 @@ EXA_SERVER_URL = "https://mcp.exa.ai/mcp"
 PACKAGED_SKILL_NAMES = (
     "agent-reach",
     "agent-reach-shape-brief",
+    "agent-reach-budgeted-research",
     "agent-reach-orchestrate",
     "agent-reach-propose-improvements",
     "agent-reach-maintain-proposals",
@@ -127,7 +128,7 @@ def _default_plugin_manifest(skill_source: str, mcp_config_path: str) -> dict[st
     return {
         "name": "agent-reach",
         "version": __version__,
-        "description": "Windows-first research integration and orchestration suite for Codex.",
+        "description": "Explicit-opt-in Windows research integration and orchestration suite for Codex.",
         "author": {
             "name": "Neo Reid",
         },
@@ -144,10 +145,10 @@ def _default_plugin_manifest(skill_source: str, mcp_config_path: str) -> dict[st
         "mcpServers": mcp_config_path,
         "interface": {
             "displayName": "Agent Reach",
-            "shortDescription": "Windows/Codex research integration and orchestration",
+            "shortDescription": "Explicit-opt-in Windows/Codex research integration",
             "longDescription": (
                 "Bootstraps, documents, diagnoses, and exposes thin read-only collection "
-                "plus in-session orchestration skills for downstream Codex research workflows on Windows."
+                "plus in-session orchestration skills for explicit Agent Reach workflows on Windows."
             ),
             "developerName": "Neo Reid",
             "category": "Developer Tools",
@@ -158,9 +159,10 @@ def _default_plugin_manifest(skill_source: str, mcp_config_path: str) -> dict[st
                 "Orchestration",
             ],
             "defaultPrompt": [
-                "Show me which research channels are ready on this Windows machine.",
-                "Turn this rough research request into a structured Agent Reach brief.",
-                "Take this rough research ask, decide whether one intake subagent is worth using, and start the Agent Reach investigation.",
+                "Using Agent Reach, show me which research channels are ready on this Windows machine.",
+                "Using Agent Reach, turn this broad research request into a bounded execution plan that keeps artifacts small.",
+                "Using Agent Reach, turn this rough research request into a structured brief.",
+                "Using Agent Reach, take this rough research ask, decide whether one intake subagent is worth using, and start the Agent Reach investigation.",
             ],
             "brandColor": "#0F766E",
         },
@@ -197,13 +199,14 @@ def _mcp_config_inline(repo_root: Path) -> dict[str, Any]:
 def _documentation_summary() -> list[str]:
     return [
         "Install the latest fork build from `git+https://github.com/iwachacha/Agent-Reach.git` or pin a commit/ref when reproducibility matters.",
-        "`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, `agent-reach-orchestrate`, `agent-reach-propose-improvements`, `agent-reach-maintain-proposals`, and `agent-reach-maintain-release`.",
+        "`agent-reach skill --install` installs the bundled Codex skill suite: `agent-reach`, `agent-reach-shape-brief`, `agent-reach-budgeted-research`, `agent-reach-orchestrate`, `agent-reach-propose-improvements`, `agent-reach-maintain-proposals`, and `agent-reach-maintain-release`.",
+        "Use Agent Reach only when the user explicitly asks for Agent Reach or one of its bundled skills; for ordinary lightweight web lookups, use the model's native browsing/search instead.",
         "Use `agent-reach collect --json` as the primary external interface in arbitrary projects.",
         "Use `--item-text-mode snippet` or `--item-text-mode none` plus `--item-text-max-chars` when downstream JSON handoffs need smaller normalized item text; `--max-text-chars` remains text-mode only.",
         "Let the calling workflow choose request scale, channels, pagination, ranking, summarization, and posting; Agent Reach exposes capabilities but does not choose scope for the caller.",
-        "Use `agent-reach-shape-brief` to normalize vague requests into a fixed research brief before execution when the request is underspecified.",
-        "Use `agent-reach-orchestrate` to move a rough or structured ask to actual Agent Reach collection start in the same session.",
-        "For most rough asks, `agent-reach-orchestrate` is the default entrypoint; use `agent-reach-shape-brief` only when you want to stop before collection starts.",
+        "Use `agent-reach-shape-brief` only when the user explicitly wants Agent Reach and you want a fixed brief contract, not a separate prompt string, before execution.",
+        "Use `agent-reach-budgeted-research` only when the user explicitly wants Agent Reach and the task is broad enough that discovery budgets, artifact retention, candidate gating, or deep-read caps should be fixed before collection.",
+        "Use `agent-reach-orchestrate` only when the user explicitly wants Agent Reach and wants to move a rough or structured ask to actual Agent Reach collection start in the same session.",
         "Use `agent-reach-propose-improvements` only for Agent Reach maintainer work that turns raw external findings into a short list of policy-compatible improvement proposals before formal review.",
         "Use `agent-reach-maintain-proposals` only for Agent Reach maintainer work that evaluates a concrete externally sourced proposal list before editing.",
         "Use `agent-reach-maintain-release` only for Agent Reach maintainer work that implements already-approved changes and carries them through shipping steps.",
@@ -274,8 +277,10 @@ def _external_project_usage() -> dict[str, Any]:
                 "agent-reach doctor --json --probe",
             ],
             "notes": [
+                "Use Agent Reach only when the user explicitly asks for Agent Reach or one of its bundled skills; otherwise prefer the model's native browsing/search for lightweight lookups.",
                 "The skill install writes the bundled skill suite to the user's Codex skill home, not to the downstream project.",
                 "Three bundled skills are maintainer-only: `agent-reach-propose-improvements`, `agent-reach-maintain-proposals`, and `agent-reach-maintain-release`.",
+                "Use `agent-reach-budgeted-research` before broad collection when the caller wants explicit control over artifact size, candidate breadth, or deep-read count.",
                 "Downstream projects do not need `.codex-plugin`, `.mcp.json`, or `agent_reach/skills` files when using the CLI.",
                 "After pushing a custom ref, refresh the global install with `uv tool install --force git+<remote-url>@<ref>` and rerun `agent-reach skill --install`.",
             ],
@@ -369,11 +374,17 @@ def _codex_runtime_policy() -> dict[str, Any]:
     request_scale_policy = _request_scale_policy()
     return {
         "default_interface": "agent-reach collect --json",
+        "activation_policy": {
+            "explicit_user_opt_in_only": True,
+            "rule": "Use Agent Reach only when the user explicitly asks for Agent Reach or names one of its bundled skills.",
+            "light_search_fallback": "Use the model's native browsing/search for ordinary lightweight lookups instead of Agent Reach.",
+        },
         "no_copy_rule": (
             "Use the globally installed CLI and skill suite. Do not copy `.codex-plugin`, `.mcp.json`, "
             "or Agent Reach source files into a downstream repository unless the user explicitly asks for repo-local artifacts."
         ),
         "decision_order": [
+            "Before invoking Agent Reach, confirm that the user explicitly asked for Agent Reach or one of its bundled skills; otherwise use the model's native browsing/search for lightweight lookups.",
             "If readiness is unknown, run `agent-reach channels --json` and `agent-reach doctor --json` first.",
             "Read `doctor.summary.required_not_ready`, `doctor.summary.informational_not_ready`, and `doctor.summary.probe_attention`; let the caller choose `--require-channel`, `--require-channels`, or `--require-all` for the run.",
             "Let the caller choose request scale first: keep narrow asks as `collect`, use bounded multi-source collection only when needed, and treat large-scale research as explicit opt-in.",
@@ -576,6 +587,11 @@ def render_codex_integration_text(payload: dict[str, Any]) -> str:
     )
     lines.append(f"  preferred interface: {payload['external_project_usage']['preferred_interface']}")
     lines.append(f"  Codex default interface: {payload['codex_runtime_policy']['default_interface']}")
+    lines.append(f"  activation: {payload['codex_runtime_policy']['activation_policy']['rule']}")
+    lines.append(
+        "  light lookup fallback: "
+        f"{payload['codex_runtime_policy']['activation_policy']['light_search_fallback']}"
+    )
     lines.append(f"  no-copy rule: {payload['codex_runtime_policy']['no_copy_rule']}")
     lines.append("  request scale: caller chooses scope; large-scale research is explicit opt-in")
     lines.append("  default plan candidates limit: 20")

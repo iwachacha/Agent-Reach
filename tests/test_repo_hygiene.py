@@ -98,6 +98,7 @@ def test_skill_suite_files_exist():
     expected = [
         "agent-reach",
         "agent-reach-shape-brief",
+        "agent-reach-budgeted-research",
         "agent-reach-orchestrate",
         "agent-reach-propose-improvements",
         "agent-reach-maintain-proposals",

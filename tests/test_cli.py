@@ -2448,6 +2448,7 @@ class TestCLI:
         assert payload["skill"]["names"] == [
             "agent-reach",
             "agent-reach-shape-brief",
+            "agent-reach-budgeted-research",
             "agent-reach-orchestrate",
             "agent-reach-propose-improvements",
             "agent-reach-maintain-proposals",

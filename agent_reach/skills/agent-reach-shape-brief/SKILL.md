@@ -1,11 +1,16 @@
 ---
 name: agent-reach-shape-brief
-description: Shape vague research or information-gathering requests into a fixed brief for downstream Agent Reach execution. Use when Codex needs to turn a rough research ask into a structured brief, ask only the minimum outcome-changing questions, and fill safe defaults for goal, target, deliverable, freshness, scope, region or language, source policy, evidence strictness, research scale, and assumptions.
+description: Shape vague research or information-gathering requests into a fixed brief for downstream Agent Reach execution. Use only when the user explicitly asks to use Agent Reach or names this skill, and you need a structured brief before any Agent Reach collection begins.
 ---
 
 # Agent Reach Shape Brief
 
+Use this skill only when the user explicitly asks to use Agent Reach or names this skill, and you need to stop at brief formation before collection begins. For ordinary lightweight searching, use the model's native browsing/search instead.
+
 Convert the user's rough request into one fixed research brief that an execution or orchestration skill can consume without further interpretation.
+
+This skill outputs a fixed brief contract for downstream Agent Reach use. It does not generate a separate external prompt string.
+If the user also needs execution-budget decisions for a broad or provenance-heavy run, hand off to `agent-reach-budgeted-research` after brief shaping instead of stretching this brief contract.
 
 ## Workflow
 

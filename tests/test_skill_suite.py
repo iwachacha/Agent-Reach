@@ -42,7 +42,56 @@ def test_shape_brief_contract_is_fixed_and_complete():
 
     assert "Ask Only When" in defaults
     assert "前提と仮定" in defaults
+    assert "explicitly asks to use Agent Reach" in skill
+    assert "does not generate a separate external prompt string" in skill
     assert "Do not generate an external prompt or start collection here." in skill
+
+
+def test_public_agent_reach_skills_require_explicit_opt_in():
+    base_skill = (_skill_dir("agent-reach") / "SKILL.md").read_text(encoding="utf-8")
+    base_metadata = (_skill_dir("agent-reach") / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    budgeted_skill = (_skill_dir("agent-reach-budgeted-research") / "SKILL.md").read_text(encoding="utf-8")
+    budgeted_metadata = (_skill_dir("agent-reach-budgeted-research") / "agents" / "openai.yaml").read_text(
+        encoding="utf-8"
+    )
+    orchestrate_skill = (_skill_dir("agent-reach-orchestrate") / "SKILL.md").read_text(encoding="utf-8")
+    orchestrate_metadata = (_skill_dir("agent-reach-orchestrate") / "agents" / "openai.yaml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "explicitly asks to use Agent Reach" in base_skill
+    assert "native browsing/search" in base_skill
+    assert "explicitly asks for Agent Reach" in base_metadata
+    assert "explicitly asks to use Agent Reach" in budgeted_skill
+    assert "does not start collection" in budgeted_skill
+    assert "explicitly asks for Agent Reach" in budgeted_metadata
+    assert "explicitly asks to use Agent Reach" in orchestrate_skill
+    assert "native browsing/search" in orchestrate_skill
+    assert "explicitly asks for Agent Reach" in orchestrate_metadata
+
+
+def test_budgeted_research_skill_has_budget_contract_and_examples():
+    skill = (_skill_dir("agent-reach-budgeted-research") / "SKILL.md").read_text(encoding="utf-8")
+    contract = (_skill_dir("agent-reach-budgeted-research") / "references" / "plan-contract.md").read_text(
+        encoding="utf-8"
+    )
+    defaults = (_skill_dir("agent-reach-budgeted-research") / "references" / "defaults.md").read_text(
+        encoding="utf-8"
+    )
+    examples = (_skill_dir("agent-reach-budgeted-research") / "references" / "examples.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "bounded execution plan" in skill
+    assert "Do not start collection here." in skill
+    assert "調査実行プラン" in contract
+    assert "成果物サイズ予算" in contract
+    assert "候補選別ゲート" in contract
+    assert "深掘り予算" in contract
+    assert "--raw-mode none" in defaults
+    assert "--save-dir .agent-reach/shards" in defaults
+    assert "--limit 20" in defaults
+    assert "broad_with_ledger" in examples
 
 
 def test_orchestrate_references_cover_subagent_policy_and_run_rules():
@@ -71,6 +120,9 @@ def test_orchestrate_references_cover_subagent_policy_and_run_rules():
     assert "run `agent-reach doctor --json`" in flow
     assert "agent-reach collect --json" in flow
     assert "exact stable channel names" in flow
+    assert "--raw-mode minimal|none" in flow
+    assert "--save-dir .agent-reach/shards" in flow
+    assert "agent-reach ledger merge --input .agent-reach/shards --output .agent-reach/evidence.jsonl --json" in flow
     assert "Use one intake-only subagent" in policy
     assert "do not delegate channel checks, collection start, or final synthesis" in policy
 
@@ -87,7 +139,8 @@ def test_orchestrate_references_cover_subagent_policy_and_run_rules():
     for section in expected_sections:
         assert section in routing
 
-    assert "agent-reach collect --json --save .agent-reach/evidence.jsonl" in examples
+    assert "agent-reach collect --json --save-dir .agent-reach/shards" in examples
+    assert "agent-reach ledger merge --input .agent-reach/shards --output .agent-reach/evidence.jsonl --json" in examples
     assert "agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json" in examples
     assert "agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json" in examples
 

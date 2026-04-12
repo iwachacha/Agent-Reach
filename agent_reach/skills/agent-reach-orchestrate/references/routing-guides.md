@@ -46,8 +46,12 @@ Choose routing hints that match the task. Do not hard-code unavailable channels;
 - Only describe evidence-ledger fan-out when the user explicitly opts into broad or provenance-heavy research.
 - In that case:
 - start with 2-4 small discovery queries
-- save raw envelopes with `--save .agent-reach/evidence.jsonl`
+- set an explicit artifact budget before running those queries
+- prefer `--raw-mode minimal|none` and `--item-text-mode snippet|none` for discovery artifacts
+- prefer `--save-dir .agent-reach/shards` when the run needs multiple collection commands
+- merge shards before `ledger summarize`, `ledger query`, or `plan candidates`
 - run `agent-reach ledger summarize --input .agent-reach/evidence.jsonl --json` when downstream automation needs neutral artifact health counts
 - run `agent-reach plan candidates --input .agent-reach/evidence.jsonl --by normalized_url --limit 20 --json`
-- deep-read only selected URLs
+- deep-read only selected URLs after candidate planning
+- keep the deep-read budget small and summarize shortlisted sources only
 - use `batch --validate-only` before any saved batch plan execution
