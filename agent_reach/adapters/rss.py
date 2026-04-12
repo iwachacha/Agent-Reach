@@ -86,11 +86,35 @@ class RSSAdapter(BaseAdapter):
                 meta=self.make_meta(value=url, limit=limit, started_at=started_at),
             )
 
-        entries = [dict(entry) for entry in parsed.entries[:limit]]
+        bozo = bool(getattr(parsed, "bozo", False))
+        entries_source = list(getattr(parsed, "entries", []) or [])
+        if bozo and not entries_source:
+            bozo_exception = getattr(parsed, "bozo_exception", None)
+            raw = {
+                "feed": dict(getattr(parsed, "feed", {}) or {}),
+                "entries": [],
+                "bozo": True,
+                "status": getattr(parsed, "status", None),
+            }
+            if bozo_exception is not None:
+                raw["bozo_exception"] = str(bozo_exception)
+            detail = str(bozo_exception).strip() if bozo_exception is not None else ""
+            message = "RSS feed could not be parsed"
+            if detail:
+                message = f"{message}: {detail}"
+            return self.error_result(
+                "read",
+                code="parse_failed",
+                message=message,
+                raw=raw,
+                meta=self.make_meta(value=url, limit=limit, started_at=started_at),
+            )
+
+        entries = [dict(entry) for entry in entries_source[:limit]]
         raw = {
             "feed": dict(parsed.feed),
             "entries": entries,
-            "bozo": bool(getattr(parsed, "bozo", False)),
+            "bozo": bozo,
             "status": getattr(parsed, "status", None),
         }
         items: list[NormalizedItem] = []
@@ -132,10 +156,10 @@ class RSSAdapter(BaseAdapter):
                 feed_title=parsed.feed.get("title"),
                 **build_pagination_meta(
                     limit=limit,
-                    page_size=len(getattr(parsed, "entries", [])),
+                    page_size=len(entries_source),
                     pages_fetched=1,
-                    has_more=len(getattr(parsed, "entries", [])) > len(entries),
-                    total_available=len(getattr(parsed, "entries", [])),
+                    has_more=len(entries_source) > len(entries),
+                    total_available=len(entries_source),
                 ),
             ),
         )

@@ -1021,6 +1021,25 @@ def test_rss_adapter_parse_failure(config, monkeypatch):
     assert payload["error"]["code"] == "parse_failed"
 
 
+def test_rss_adapter_bozo_without_entries_reports_parse_failure(config, monkeypatch):
+    parsed = SimpleNamespace(
+        feed={"title": "Broken Feed"},
+        entries=[],
+        bozo=True,
+        bozo_exception=RuntimeError("malformed xml"),
+        status=200,
+    )
+    monkeypatch.setattr("agent_reach.adapters.rss.feedparser.parse", lambda url: parsed)
+
+    payload = RSSAdapter(config=config).read("https://example.com/feed.xml")
+
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "parse_failed"
+    assert payload["raw"]["bozo"] is True
+    assert "malformed xml" in payload["error"]["message"]
+    assert payload["raw"]["bozo_exception"] == "malformed xml"
+
+
 def test_twitter_adapter_success(config, monkeypatch):
     adapter = TwitterAdapter(config=config)
     monkeypatch.setattr(adapter, "command_path", lambda _name: "twitter")

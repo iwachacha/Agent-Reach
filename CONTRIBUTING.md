@@ -62,7 +62,6 @@ Every channel contract must include:
 
 - `name`
 - `description`
-- `tier`
 - `backends`
 - `auth_kind`
 - `entrypoint_kind`
@@ -71,7 +70,10 @@ Every channel contract must include:
 - `host_patterns`
 - `example_invocations`
 - `supports_probe`
+- `probe_operations`
+- `probe_coverage`
 - `install_hints`
+- `operation_contracts`
 
 ## Updating the local install
 

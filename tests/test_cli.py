@@ -1229,10 +1229,20 @@ class TestCLI:
         assert payload["not_ready_channels"][0]["channel"] == "searxng"
 
     def test_scout_requires_plan_only(self, capsys):
-        assert main(["scout", "--topic", "MCP", "--json"]) == 2
+        assert main(["scout", "--topic", "MCP"]) == 2
         captured = capsys.readouterr()
         assert captured.out == ""
         assert "requires --plan-only" in captured.err
+
+    def test_scout_requires_plan_only_json_error_payload(self, capsys):
+        assert main(["scout", "--topic", "MCP", "--json"]) == 2
+        captured = capsys.readouterr()
+        assert captured.err == ""
+        payload = json.loads(captured.out)
+        assert payload["command"] == "scout"
+        assert payload["plan_only"] is False
+        assert payload["error"]["code"] == "scout_plan_error"
+        assert "requires --plan-only" in payload["error"]["message"]
 
     def test_scout_validates_stale_preset_channels(self, capsys, monkeypatch):
         monkeypatch.setattr(
@@ -1246,7 +1256,56 @@ class TestCLI:
                     "name": "web",
                     "description": "Any web page",
                     "operations": ["read"],
-                    "operation_contracts": {"read": {"name": "read", "input_kind": "url", "accepts_limit": True, "options": []}},
+                    "operation_contracts": {
+                        "read": {
+                            "name": "read",
+                            "input_kind": "url",
+                            "accepts_limit": True,
+                            "options": [],
+                        }
+                    },
+                    "supports_probe": True,
+                },
+            ],
+        )
+
+        assert (
+            main(
+                [
+                    "scout",
+                    "--topic",
+                    "MCP",
+                    "--preset",
+                    "broad-web",
+                    "--plan-only",
+                ]
+            )
+            == 2
+        )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "Preset references unknown channel" in captured.err
+
+    def test_scout_validates_stale_preset_channels_json_error_payload(self, capsys, monkeypatch):
+        monkeypatch.setattr(
+            "agent_reach.scout.check_all",
+            lambda _config, probe=False: {"web": {"status": "ok", "message": "ready"}},
+        )
+        monkeypatch.setattr(
+            "agent_reach.scout.get_all_channel_contracts",
+            lambda: [
+                {
+                    "name": "web",
+                    "description": "Any web page",
+                    "operations": ["read"],
+                    "operation_contracts": {
+                        "read": {
+                            "name": "read",
+                            "input_kind": "url",
+                            "accepts_limit": True,
+                            "options": [],
+                        }
+                    },
                     "supports_probe": True,
                 },
             ],
@@ -1267,8 +1326,13 @@ class TestCLI:
             == 2
         )
         captured = capsys.readouterr()
-        assert captured.out == ""
-        assert "Preset references unknown channel" in captured.err
+        assert captured.err == ""
+        payload = json.loads(captured.out)
+        assert payload["command"] == "scout"
+        assert payload["plan_only"] is True
+        assert payload["preset"] == "broad-web"
+        assert payload["error"]["code"] == "scout_plan_error"
+        assert "Preset references unknown channel" in payload["error"]["message"]
 
     def test_configure_searxng_base_url_normalizes_value(self, capsys, monkeypatch):
         saved = {}

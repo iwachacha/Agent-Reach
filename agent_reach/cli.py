@@ -1399,9 +1399,36 @@ def _batch_error_payload(args, message: str) -> dict:
     }
 
 
+def _scout_error_payload(args, message: str) -> dict:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": utc_timestamp(),
+        "command": "scout",
+        "plan_only": bool(args.plan_only),
+        "topic": args.topic,
+        "budget": args.budget,
+        "budget_requested": args.budget,
+        "quality_profile": args.quality,
+        "preset": args.preset,
+        "available_channels": [],
+        "ready_channels": [],
+        "not_ready_channels": [],
+        "seed_channels": [],
+        "required_readiness_checks": [],
+        "error": {
+            "code": "scout_plan_error",
+            "message": message,
+        },
+    }
+
+
 def _cmd_scout(args) -> int:
     if not args.plan_only:
-        print("scout currently requires --plan-only", file=sys.stderr)
+        message = "scout currently requires --plan-only"
+        if args.json:
+            _print_json(_scout_error_payload(args, message))
+        else:
+            print(message, file=sys.stderr)
         return 2
     try:
         payload = build_scout_plan(
@@ -1411,7 +1438,11 @@ def _cmd_scout(args) -> int:
             preset=args.preset,
         )
     except ScoutPlanError as exc:
-        print(f"Could not build scout plan: {exc}", file=sys.stderr)
+        message = f"Could not build scout plan: {exc}"
+        if args.json:
+            _print_json(_scout_error_payload(args, message))
+        else:
+            print(message, file=sys.stderr)
         return 2
     if args.json:
         _print_json(payload)
